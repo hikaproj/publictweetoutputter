@@ -100,19 +100,15 @@ try {
   const srcService = path.resolve('src-tauri/mobile/android/FxTweetForegroundService.kt');
   const targetMainActivity = path.join(pkgDir, 'MainActivity.kt');
 
-  if (fs.existsSync(srcMainActivity)) {
+  if (fs.existsSync(targetMainActivity)) {
+    // If tauri android init already generated MainActivity.kt, preserve it and strip any bad imports
+    let mainContent = fs.readFileSync(targetMainActivity, 'utf-8');
+    mainContent = mainContent.replace(/import\s+app\.tauri.*TauriActivity.*\r?\n/g, '');
+    fs.writeFileSync(targetMainActivity, mainContent, 'utf-8');
+    console.log('[configure-android] Verified and preserved Tauri-generated MainActivity.kt');
+  } else if (fs.existsSync(srcMainActivity)) {
     fs.copyFileSync(srcMainActivity, targetMainActivity);
     console.log('[configure-android] Injected MainActivity.kt');
-  }
-
-  // Ensure correct TauriActivity import (app.tauri.plugin.TauriActivity)
-  if (fs.existsSync(targetMainActivity)) {
-    let mainContent = fs.readFileSync(targetMainActivity, 'utf-8');
-    if (mainContent.includes('import app.tauri.TauriActivity')) {
-      mainContent = mainContent.replace('import app.tauri.TauriActivity', 'import app.tauri.plugin.TauriActivity');
-      fs.writeFileSync(targetMainActivity, mainContent, 'utf-8');
-      console.log('[configure-android] Fixed TauriActivity import in MainActivity.kt');
-    }
   }
 
   if (fs.existsSync(srcService)) {
