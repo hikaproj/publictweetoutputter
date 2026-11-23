@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# FxTwitter Archive Studio - Universal CLI & Portal Installer
+# FxTwitter Archive Studio - Universal CLI & Desktop Installer
 # Linux (Debian, Arch, Ubuntu, Fedora, Alpine) & macOS (Intel & Apple Silicon)
 # Created by Hikaproj
 # ==============================================================================
@@ -52,16 +52,6 @@ ARCH_TYPE="$(uname -m)"
 
 echo "Detected Platform: ${OS_TYPE} (${ARCH_TYPE})"
 
-TARGET_FILE=""
-if [[ "$OS_TYPE" == "linux" ]]; then
-  TARGET_FILE="fxtweet-studio-linux-cli.tar.gz"
-elif [[ "$OS_TYPE" == "darwin" ]]; then
-  TARGET_FILE="fxtweet-studio-macos-cli.tar.gz"
-else
-  echo "Unsupported OS: $OS_TYPE. For Windows, please run install.ps1 in PowerShell."
-  exit 1
-fi
-
 # Determine Target Directory
 if [[ -n "$INSTALL_DIR" ]]; then
   TARGET_DIR="$INSTALL_DIR"
@@ -86,62 +76,72 @@ trap cleanup EXIT
 
 echo "Fetching latest release metadata from GitHub (${REPO})..."
 
-DOWNLOAD_URL=""
+LATEST_TAG="v1.0.0"
 if command -v curl &>/dev/null; then
   LATEST_TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | head -n1 | cut -d '"' -f 4 || echo "v1.0.0")"
-  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${TARGET_FILE}"
 elif command -v wget &>/dev/null; then
   LATEST_TAG="$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | head -n1 | cut -d '"' -f 4 || echo "v1.0.0")"
-  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${TARGET_FILE}"
+fi
+
+TAG_NO_V="${LATEST_TAG#v}"
+
+CANDIDATES=()
+if [[ "$OS_TYPE" == "linux" ]]; then
+  CANDIDATES=(
+    "fxtweet-studio-linux-x86_64-${LATEST_TAG}.tar.gz"
+    "fxtweet-studio-linux-x86_64-v${TAG_NO_V}.tar.gz"
+    "fxtweet-studio-linux-cli.tar.gz"
+  )
+elif [[ "$OS_TYPE" == "darwin" ]]; then
+  CANDIDATES=(
+    "fxtweet-studio-macos-universal-${LATEST_TAG}.tar.gz"
+    "fxtweet-studio-macos-universal-v${TAG_NO_V}.tar.gz"
+    "fxtweet-studio-macos-cli.tar.gz"
+  )
 else
-  echo "Error: Neither curl nor wget was found. Please install either tool to proceed."
+  echo "Unsupported OS: $OS_TYPE. For Windows, please run install.ps1 in PowerShell."
   exit 1
 fi
 
-echo "Downloading ${TARGET_FILE} (${LATEST_TAG})..."
-if command -v curl &>/dev/null; then
-  curl -fsSL -o "${TEMP_DIR}/${TARGET_FILE}" "$DOWNLOAD_URL" || {
-    echo "Direct binary download unavailable, falling back to repository build / source..."
-  }
-elif command -v wget &>/dev/null; then
-  wget -qO "${TEMP_DIR}/${TARGET_FILE}" "$DOWNLOAD_URL" || true
-fi
+DOWNLOADED=false
+DOWNLOADED_FILE=""
 
-# Extract and install
-if [[ -f "${TEMP_DIR}/${TARGET_FILE}" ]] && [[ -s "${TEMP_DIR}/${TARGET_FILE}" ]]; then
-  tar -xzf "${TEMP_DIR}/${TARGET_FILE}" -C "$TEMP_DIR"
-  if [[ -f "${TEMP_DIR}/fxtweet-cli" ]]; then
-    install -m 755 "${TEMP_DIR}/fxtweet-cli" "${TARGET_DIR}/fxtweet"
-  elif [[ -f "${TEMP_DIR}/fxtweet" ]]; then
-    install -m 755 "${TEMP_DIR}/fxtweet" "${TARGET_DIR}/fxtweet"
+for TARGET_FILE in "${CANDIDATES[@]}"; do
+  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${TARGET_FILE}"
+  echo "Trying download from: ${DOWNLOAD_URL}..."
+  if command -v curl &>/dev/null; then
+    if curl -fsSL -o "${TEMP_DIR}/${TARGET_FILE}" "$DOWNLOAD_URL"; then
+      DOWNLOADED=true
+      DOWNLOADED_FILE="${TEMP_DIR}/${TARGET_FILE}"
+      break
+    fi
+  elif command -v wget &>/dev/null; then
+    if wget -qO "${TEMP_DIR}/${TARGET_FILE}" "$DOWNLOAD_URL"; then
+      DOWNLOADED=true
+      DOWNLOADED_FILE="${TEMP_DIR}/${TARGET_FILE}"
+      break
+    fi
   fi
+done
+
+if [[ "$DOWNLOADED" == true ]] && [[ -s "$DOWNLOADED_FILE" ]]; then
+  tar -xzf "$DOWNLOADED_FILE" -C "$TEMP_DIR"
+  if [[ -f "${TEMP_DIR}/fxtweet-cli" ]]; then
+    install -m 755 "${TEMP_DIR}/fxtweet-cli" "${TARGET_DIR}/fxtweet-cli"
+    ln -sf "${TARGET_DIR}/fxtweet-cli" "${TARGET_DIR}/fxtweet" || true
+  fi
+  if [[ -f "${TEMP_DIR}/fxtweet-studio" ]]; then
+    install -m 755 "${TEMP_DIR}/fxtweet-studio" "${TARGET_DIR}/fxtweet-studio"
+  fi
+  echo "Binaries installed to ${TARGET_DIR}"
 else
-  # Portable Node.js fallback wrapper
-  echo "Setting up portable wrapper..."
-  cat << 'EOF' > "${TARGET_DIR}/fxtweet"
-#!/usr/bin/env bash
-if command -v node >/dev/null 2>&1; then
-  exec node -e "console.log('FxTwitter Archive Studio (by Hikaproj) - Portable CLI Ready');" "$@"
-else
-  echo "Node.js or standalone binary required."
-fi
-EOF
-  chmod +x "${TARGET_DIR}/fxtweet"
+  echo "Direct release binaries not yet uploaded for ${LATEST_TAG}."
 fi
 
-echo "Installed executable to: ${TARGET_DIR}/fxtweet"
-
-# Ensure in PATH
-if [[ "$TARGET_DIR" == "$DEFAULT_USER_DIR" ]] && [[ ":$PATH:" != *":$DEFAULT_USER_DIR:"* ]]; then
-  echo ""
-  echo "Note: ${DEFAULT_USER_DIR} is not in your current PATH."
-  echo "Add it with:"
-  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-  echo "to your ~/.bashrc or ~/.zshrc."
-fi
-
-echo ""
 echo "========================================================"
-echo "  Installation Successful!"
-echo "  Run 'fxtweet --help' to start archiving."
+echo "  Installation Completed Successfully!"
+echo "  - CLI: ${TARGET_DIR}/fxtweet-cli (or fxtweet)"
+if [[ -f "${TARGET_DIR}/fxtweet-studio" ]]; then
+  echo "  - GUI: ${TARGET_DIR}/fxtweet-studio"
+fi
 echo "========================================================"

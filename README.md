@@ -112,17 +112,17 @@ Windows, macOS, Linux (Debian, Arch), iOS, iPadOS, Android で動作する軽量
 ### Release に自動添付されるファイル一覧:
 1. `install.sh` (Linux + macOS 共通インストーラー)
 2. `install.ps1` (Windows PowerShell 共通インストーラー)
-3. `fxtweet-studio-nodejs-vX.X.X.zip` (Node.js 版ポータブル一式)
-4. `fxtweet-studio-windows-cli.zip` (Windows 向けスタンドアロンバイナリ & インストーラー)
-5. `fxtweet-studio-macos-cli.tar.gz` (macOS 向け Universal Binary)
-6. `fxtweet-studio-linux-cli.tar.gz` (Debian / Ubuntu 向けバイナリ)
-7. `fxtweet-studio-arch-package.tar.gz` (Arch Linux 向け PKGBUILD 付属パッケージ)
-8. `Dockerfile` & `docker-compose.yml` (コンテナ実行マニフェスト)
+3. `fxtweet-studio-windows-x86_64-vX.X.X.zip` (Windows 向け Rust GUI `fxtweet-studio.exe` & CLI `fxtweet-cli.exe` 同梱)
+4. `fxtweet-studio-macos-universal-vX.X.X.tar.gz` (macOS 向け Universal GUI & CLI 同梱)
+5. `fxtweet-studio-linux-x86_64-vX.X.X.tar.gz` (Linux 向け GUI & CLI 同梱)
+6. `fxtweet-studio-arch-x86_64-vX.X.X.tar.gz` (Arch Linux 向け PKGBUILD 付属パッケージ)
+7. `fxtweet-studio-nodejs-vX.X.X.zip` / `.tar.gz` (Node.js 版ポータブル一式)
+8. `Dockerfile` & `docker-compose.yml` (Docker コンテナ実行マニフェスト)
 9. `SHA256SUMS.txt` (整合性チェックサム)
 
 ---
 
-## 🖥️ X (Twitter) ライク・ビューアーの使い方
+## X (Twitter) ライク・ビューアーの使い方
 
 生成された ZIP や `.xarchpjzip`、フォルダ内の **`viewer.html`** をブラウザで開くだけで、本家 X と同じデザインで保存データを閲覧できます。
 
@@ -138,8 +138,8 @@ Windows, macOS, Linux (Debian, Arch), iOS, iPadOS, Android で動作する軽量
 
 ---
 
-## 👤 製作者 (Author)
+## 製作者 (Author)
 **Hikaproj**
 
-## 🛡️ ライセンス
+## ライセンス
 MIT License

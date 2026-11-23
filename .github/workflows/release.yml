@@ -149,6 +149,20 @@ jobs:
         if: steps.check_enabled.outputs.ENABLED == 'true'
         uses: actions/checkout@v4
 
+      - name: Determine Version
+        if: steps.check_enabled.outputs.ENABLED == 'true'
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VER="${{ github.event.inputs.version }}"
+          else
+            VER="${GITHUB_REF#refs/tags/}"
+            VER="${VER#v}"
+          fi
+          echo "VERSION=${VER}" >> $GITHUB_ENV
+          echo "VERSION=${VER}" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Setup Node.js
         if: steps.check_enabled.outputs.ENABLED == 'true'
         uses: actions/setup-node@v4
@@ -207,12 +221,16 @@ jobs:
           if (Test-Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe) {
             Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe -Destination release-bin/ -Force
           }
-          Compress-Archive -Path release-bin/* -DestinationPath fxtweet-studio-windows-cli.zip -Force
+          $MainZip = "fxtweet-studio-windows-x86_64-v${env:VERSION}.zip"
+          Compress-Archive -Path release-bin/* -DestinationPath $MainZip -Force
+          Copy-Item -Path $MainZip -Destination "fxtweet-studio-windows-cli.zip" -Force
 
       - name: Package Desktop Artifacts (macOS)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
         run: |
-          tar -czf fxtweet-studio-macos-cli.tar.gz -C release-bin fxtweet-cli fxtweet-studio
+          MAIN_TAR="fxtweet-studio-macos-universal-v${VERSION}.tar.gz"
+          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio
+          cp "$MAIN_TAR" fxtweet-studio-macos-cli.tar.gz
 
       - name: Package Desktop Artifacts (Linux / Debian / Arch)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Linux'
@@ -222,27 +240,30 @@ jobs:
           if [ -f src-tauri/target/${{ matrix.target }}/release/fxtweet-studio ]; then
             cp src-tauri/target/${{ matrix.target }}/release/fxtweet-studio release-bin/
           fi
-          tar -czf fxtweet-studio-linux-cli.tar.gz -C release-bin fxtweet-cli fxtweet-studio
+          MAIN_TAR="fxtweet-studio-linux-x86_64-v${VERSION}.tar.gz"
+          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio
+          cp "$MAIN_TAR" fxtweet-studio-linux-cli.tar.gz
           
           # Arch Linux PKGBUILD generation (self-contained package)
-          cat << 'EOF' > release-bin/PKGBUILD
-          # Maintainer: Hikaproj
-          pkgname=fxtweet-studio-bin
-          pkgver=1.0.0
-          pkgrel=1
-          pkgdesc="Ultra-fast Twitter/X bulk post and media archive studio by Hikaproj"
-          arch=('x86_64')
-          url="https://github.com/Hikaproj/publictweetoutputter"
-          license=('MIT')
-          depends=('webkit2gtk-4.1' 'gtk3' 'openssl')
-          source=("fxtweet-cli" "fxtweet-studio")
-          sha256sums=('SKIP' 'SKIP')
-          package() {
-              install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-cli"
-              install -Dm755 "${srcdir}/fxtweet-studio" "${pkgdir}/usr/bin/fxtweet-studio"
-          }
-          EOF
-          tar -czf fxtweet-studio-arch-package.tar.gz -C release-bin PKGBUILD fxtweet-cli fxtweet-studio
+          cat << EOF > release-bin/PKGBUILD
+# Maintainer: Hikaproj
+pkgname=fxtweet-studio-bin
+pkgver=${VERSION}
+pkgrel=1
+pkgdesc="Ultra-fast Twitter/X bulk post and media archive studio by Hikaproj"
+arch=('x86_64')
+url="https://github.com/Hikaproj/publictweetoutputter"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'openssl')
+source=("fxtweet-cli" "fxtweet-studio")
+sha256sums=('SKIP' 'SKIP')
+package() {
+    install -Dm755 "\${srcdir}/fxtweet-cli" "\${pkgdir}/usr/bin/fxtweet-cli"
+    install -Dm755 "\${srcdir}/fxtweet-studio" "\${pkgdir}/usr/bin/fxtweet-studio"
+}
+EOF
+          tar -czf "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" -C release-bin PKGBUILD fxtweet-cli fxtweet-studio
+          cp "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" fxtweet-studio-arch-package.tar.gz
 
       - name: Upload Platform Artifacts
         if: steps.check_enabled.outputs.ENABLED == 'true'
@@ -316,6 +337,13 @@ jobs:
             # Windows PowerShell (x86_64 / arm64)
             irm https://raw.githubusercontent.com/Hikaproj/publictweetoutputter/main/install.ps1 | iex
             ```
+
+            ### Downloads:
+            - **Windows GUI & CLI**: `fxtweet-studio-windows-x86_64-${{ steps.get_version.outputs.VERSION }}.zip` (contains `fxtweet-studio.exe` GUI & `fxtweet-cli.exe` CLI)
+            - **macOS Universal GUI & CLI**: `fxtweet-studio-macos-universal-${{ steps.get_version.outputs.VERSION }}.tar.gz` (Universal binary for Intel & Apple Silicon)
+            - **Linux GUI & CLI**: `fxtweet-studio-linux-x86_64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
+            - **Arch Linux Package**: `fxtweet-studio-arch-x86_64-${{ steps.get_version.outputs.VERSION }}.tar.gz` (includes `PKGBUILD`)
+            - **Node.js Edition**: `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.zip` / `.tar.gz`
 
             ### Features:
             - Ultra-fast asynchronous Twitter/X timeline and media backup using FxTwitter v2 API

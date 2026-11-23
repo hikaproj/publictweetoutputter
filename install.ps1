@@ -32,7 +32,7 @@ if (-not (Test-Path $TargetDir)) {
     New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 }
 
-$TempZip = Join-Path ([System.IO.Path]::GetTempPath()) "fxtweet-windows-cli.zip"
+$TempZip = Join-Path ([System.IO.Path]::GetTempPath()) "fxtweet-windows.zip"
 
 Write-Host "Querying latest release from GitHub ($Repo)..." -ForegroundColor Gray
 
@@ -43,15 +43,29 @@ try {
     $Tag = "v1.0.0"
 }
 
-$DownloadUrl = "https://github.com/$Repo/releases/download/$Tag/fxtweet-studio-windows-cli.zip"
-Write-Host "Downloading $Tag assets from $DownloadUrl..." -ForegroundColor Green
+$TagNoV = $Tag.TrimStart('v')
+$CandidateUrls = @(
+    "https://github.com/$Repo/releases/download/$Tag/fxtweet-studio-windows-x86_64-$Tag.zip",
+    "https://github.com/$Repo/releases/download/$Tag/fxtweet-studio-windows-x86_64-v$TagNoV.zip",
+    "https://github.com/$Repo/releases/download/$Tag/fxtweet-studio-windows-cli.zip"
+)
 
-try {
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempZip -UseBasicParsing
-    Expand-Archive -Path $TempZip -DestinationPath $TargetDir -Force
-    Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
-    Write-Host "Extracted binaries into: $TargetDir" -ForegroundColor Green
-} catch {
+$Downloaded = $false
+foreach ($Url in $CandidateUrls) {
+    try {
+        Write-Host "Attempting download from: $Url" -ForegroundColor Gray
+        Invoke-WebRequest -Uri $Url -OutFile $TempZip -UseBasicParsing -ErrorAction Stop
+        Expand-Archive -Path $TempZip -DestinationPath $TargetDir -Force
+        Remove-Item $TempZip -Force -ErrorAction SilentlyContinue
+        Write-Host "Successfully extracted binaries into: $TargetDir" -ForegroundColor Green
+        $Downloaded = $true
+        break
+    } catch {
+        # Continue to next candidate
+    }
+}
+
+if (-not $Downloaded) {
     Write-Warning "Direct binary release not yet published. Generating local launcher in $TargetDir..."
     $LauncherCmd = "@echo off`r`nnode `"%~dp0..\cli.js`" %*"
     Set-Content -Path (Join-Path $TargetDir "fxtweet.cmd") -Value $LauncherCmd -Encoding ASCII
@@ -69,6 +83,8 @@ if ($UserPath -notlike "*$TargetDir*") {
 Write-Host ""
 Write-Host "========================================================" -ForegroundColor Green
 Write-Host "  Installation Completed Successfully!" -ForegroundColor Green
-Write-Host "  Target: $TargetDir" -ForegroundColor Green
-Write-Host "  Run 'fxtweet --help' in any new terminal session." -ForegroundColor Green
+Write-Host "  Target Directory: $TargetDir" -ForegroundColor Green
+Write-Host "  - GUI App:  $TargetDir\fxtweet-studio.exe" -ForegroundColor Green
+Write-Host "  - CLI Tool: $TargetDir\fxtweet-cli.exe" -ForegroundColor Green
+Write-Host "  Run 'fxtweet-cli --help' or double-click fxtweet-studio.exe." -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Green
