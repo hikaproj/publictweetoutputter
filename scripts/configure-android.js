@@ -12,7 +12,21 @@ try {
   console.log('[configure-android] Note creating genDir:', e.message);
 }
 
-// 1. Setup release keystore.properties
+// 1. Copy release.jks to app folder if present
+const rootKeystore = path.join(genDir, 'release.jks');
+const appKeystore = path.join(genDir, 'app/release.jks');
+if (fs.existsSync(rootKeystore)) {
+  try {
+    const appDir = path.join(genDir, 'app');
+    if (!fs.existsSync(appDir)) fs.mkdirSync(appDir, { recursive: true });
+    fs.copyFileSync(rootKeystore, appKeystore);
+    console.log('[configure-android] Copied release.jks to app/release.jks');
+  } catch (e) {
+    console.log('[configure-android] Note copying keystore to app:', e.message);
+  }
+}
+
+// 2. Setup release keystore.properties
 try {
   const keystorePropPath = path.join(genDir, 'keystore.properties');
   const keystorePropContent = `storePassword=hikaproj2026
@@ -26,7 +40,22 @@ storeFile=release.jks
   console.log('[configure-android] Note writing keystore.properties:', e.message);
 }
 
-// 2. Inject signingConfigs into build.gradle.kts
+// 3. Suppress AGP deprecation warnings in gradle.properties
+const gradlePropPath = path.join(genDir, 'gradle.properties');
+if (fs.existsSync(gradlePropPath)) {
+  try {
+    let propContent = fs.readFileSync(gradlePropPath, 'utf-8');
+    if (!propContent.includes('suppressAgpWarnings')) {
+      propContent += '\nandroid.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE,DEPRECATED_DSL\n';
+      fs.writeFileSync(gradlePropPath, propContent, 'utf-8');
+      console.log('[configure-android] Added suppressAgpWarnings to gradle.properties');
+    }
+  } catch (e) {
+    console.log('[configure-android] Note updating gradle.properties:', e.message);
+  }
+}
+
+// 4. Inject signingConfigs into build.gradle.kts
 const gradlePath = path.join(genDir, 'app/build.gradle.kts');
 if (fs.existsSync(gradlePath)) {
   try {
@@ -35,15 +64,10 @@ if (fs.existsSync(gradlePath)) {
       const signingBlock = `
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = rootProject.file("keystore.properties")
-            val keystoreProperties = java.util.Properties()
-            if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-            }
+            keyAlias = "fxtweet"
+            keyPassword = "hikaproj2026"
+            storeFile = rootProject.file("release.jks")
+            storePassword = "hikaproj2026"
         }
     }
 `;
@@ -62,7 +86,7 @@ if (fs.existsSync(gradlePath)) {
   console.log('[configure-android] Note: app/build.gradle.kts not present yet.');
 }
 
-// 3. Inject Kotlin sources (MainActivity & FxTweetForegroundService)
+// 5. Inject Kotlin sources (MainActivity & FxTweetForegroundService)
 const pkgDir = path.join(
   genDir,
   'app/src/main/java/com/hikaproj/app/mobile/pubtweetoutputter'
@@ -87,7 +111,7 @@ try {
   console.log('[configure-android] Note injecting Kotlin sources:', e.message);
 }
 
-// 4. Update AndroidManifest.xml
+// 6. Update AndroidManifest.xml
 const manifestPath = path.join(genDir, 'app/src/main/AndroidManifest.xml');
 if (fs.existsSync(manifestPath)) {
   try {
