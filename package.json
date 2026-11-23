@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "cli": "node cli.js"
+    "cli": "node cli.js",
+    "tauri": "tauri",
+    "build": "node scripts/generate-icons.js"
   },
   "keywords": [
     "twitter",
