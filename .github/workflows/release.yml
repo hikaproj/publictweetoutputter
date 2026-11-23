@@ -392,93 +392,14 @@ jobs:
             -keypass hikaproj2026 \
             -dname "CN=Hikaproj, OU=Studio, O=FxTwitter, L=Tokyo, ST=Tokyo, C=JP"
 
-          cat << 'EOF' > src-tauri/gen/android/keystore.properties
-          storePassword=hikaproj2026
-          keyPassword=hikaproj2026
-          keyAlias=fxtweet
-          storeFile=release.jks
-          EOF
+          # 3. Configure Android project (keystore.properties, build.gradle.kts, Kotlin sources, AndroidManifest)
+          node scripts/configure-android.js
 
-          # 3. Inject signingConfigs into src-tauri/gen/android/app/build.gradle.kts
-          python3 - << 'PYEOF'
-          import os
-
-          gradle_path = 'src-tauri/gen/android/app/build.gradle.kts'
-          if os.path.exists(gradle_path):
-              with open(gradle_path, 'r', encoding='utf-8') as f:
-                  content = f.read()
-              
-              if 'signingConfigs' not in content:
-                  signing_block = """
-              signingConfigs {
-                  create("release") {
-                      val keystorePropertiesFile = rootProject.file("keystore.properties")
-                      val keystoreProperties = java.util.Properties()
-                      if (keystorePropertiesFile.exists()) {
-                          keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
-                          keyAlias = keystoreProperties["keyAlias"] as String
-                          keyPassword = keystoreProperties["keyPassword"] as String
-                          storeFile = file(keystoreProperties["storeFile"] as String)
-                          storePassword = keystoreProperties["storePassword"] as String
-                      }
-                  }
-              }
-          """
-                  content = content.replace("buildTypes {", signing_block + "\n    buildTypes {")
-                  content = content.replace('getByName("release") {', 'getByName("release") {\n            signingConfig = signingConfigs.getByName("release")')
-                  with open(gradle_path, 'w', encoding='utf-8') as f:
-                      f.write(content)
-                  print("Injected signingConfigs into app/build.gradle.kts")
-          PYEOF
-
-          # 4. Inject Kotlin sources (MainActivity & FxTweetForegroundService)
-          APP_PKG_DIR="src-tauri/gen/android/app/src/main/java/com/hikaproj/app/mobile/pubtweetoutputter"
-          mkdir -p "$APP_PKG_DIR"
-          cp src-tauri/mobile/android/MainActivity.kt "$APP_PKG_DIR/"
-          cp src-tauri/mobile/android/FxTweetForegroundService.kt "$APP_PKG_DIR/"
-
-          # 5. Update AndroidManifest.xml (ensure AGP 8+ compliance, WakeLock and Foldables support)
-          python3 - << 'PYEOF'
-          import os, re
-
-          manifest_path = 'src-tauri/gen/android/app/src/main/AndroidManifest.xml'
-          if os.path.exists(manifest_path):
-              with open(manifest_path, 'r', encoding='utf-8') as f:
-                  content = f.read()
-
-              # Strip package="..." attribute on <manifest> for AGP 8+
-              content = re.sub(r'(<manifest[^>]*?)\s+package="[^"]*"', r'\1', content)
-
-              perms = [
-                  '<uses-permission android:name="android.permission.INTERNET" />',
-                  '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
-                  '<uses-permission android:name="android.permission.WAKE_LOCK" />',
-                  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
-                  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />',
-                  '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
-                  '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />'
-              ]
-              for p in perms:
-                  if p not in content:
-                      content = content.replace('<application', p + '\n    <application')
-
-              service_decl = '<service android:name=".FxTweetForegroundService" android:exported="false" android:foregroundServiceType="dataSync" />'
-              if service_decl not in content:
-                  content = content.replace('</application>', '    ' + service_decl + '\n    </application>')
-
-              if 'android:name=".MainActivity"' in content:
-                  content = content.replace('android:name=".MainActivity"', 'android:name=".MainActivity" android:resizeableActivity="true" android:supportsPictureInPicture="true"')
-
-              with open(manifest_path, 'w', encoding='utf-8') as f:
-                  f.write(content)
-              print("Configured AndroidManifest.xml with AGP 8+ compliance, WakeLock and Foldable attributes")
-          PYEOF
-
-          # 6. Execute Tauri Android build (builds ARM64 APK with Rust native library)
+          # 4. Execute Tauri Android build (builds ARM64 APK with Rust native library)
           echo "Starting Tauri Android build..."
           npx @tauri-apps/cli android build --apk --target aarch64 || (cd src-tauri/gen/android && ./gradlew assembleRelease || ./gradlew assembleDebug)
 
-          # 7. Locate generated APK
+          # 5. Locate generated APK
           FOUND_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | grep -v "unaligned" | head -n 1)
           if [ -z "$FOUND_APK" ]; then
             FOUND_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
@@ -490,10 +411,10 @@ jobs:
             exit 1
           fi
 
-          # 8. Align with zipalign (4-byte alignment required by Android)
+          # 6. Align with zipalign (4-byte alignment required by Android)
           "$BUILD_TOOLS/zipalign" -f -v -p 4 "$FOUND_APK" aligned.apk || cp "$FOUND_APK" aligned.apk
 
-          # 9. Sign with apksigner (v2 + v3 scheme required by Android 7+ / 9+)
+          # 7. Sign with apksigner (v2 + v3 scheme required by Android 7+ / 9+)
           "$BUILD_TOOLS/apksigner" sign \
             --ks src-tauri/gen/android/release.jks \
             --ks-pass pass:hikaproj2026 \
@@ -501,7 +422,7 @@ jobs:
             --out release-android/fxtweet-studio-android-v${VERSION}.apk \
             aligned.apk
 
-          # 10. STRICT VALIDATION CHECKS (Guarantees zero corrupt APKs)
+          # 8. STRICT VALIDATION CHECKS (Guarantees zero corrupt APKs)
           echo "=== Verifying APK Signature ==="
           "$BUILD_TOOLS/apksigner" verify --verbose release-android/fxtweet-studio-android-v${VERSION}.apk
 
@@ -516,7 +437,7 @@ jobs:
             exit 1
           fi
 
-          # 11. Create standard naming aliases & SHA256 checksums
+          # 9. Create standard naming aliases & SHA256 checksums
           cp release-android/fxtweet-studio-android-v${VERSION}.apk release-android/fxtweet-studio-android-arm64-v${VERSION}.apk
           cp release-android/fxtweet-studio-android-v${VERSION}.apk release-android/fxtweet-studio-android-universal-v${VERSION}.apk
 
