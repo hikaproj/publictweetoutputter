@@ -33,6 +33,7 @@ pub struct ScrapeConfig {
     pub max_tweets: usize,
     pub continuous: bool,
     pub continuous_interval: u64,
+    pub output_dir: Option<String>,
 }
 
 impl Default for ScrapeConfig {
@@ -57,6 +58,7 @@ impl Default for ScrapeConfig {
             max_tweets: 0,
             continuous: false,
             continuous_interval: 30,
+            output_dir: None,
         }
     }
 }
@@ -102,7 +104,16 @@ impl ScrapeEngine {
         let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
         let clean_name = config.screen_name.trim_start_matches('@').trim();
         let folder_name = format!("{}_{}", clean_name, timestamp);
-        let output_dir = base_output.join(folder_name);
+        let base = if let Some(ref custom) = config.output_dir {
+            if !custom.trim().is_empty() {
+                PathBuf::from(custom.trim())
+            } else {
+                base_output.to_path_buf()
+            }
+        } else {
+            base_output.to_path_buf()
+        };
+        let output_dir = base.join(folder_name);
 
         Self {
             config,

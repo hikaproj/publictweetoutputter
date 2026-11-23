@@ -2,7 +2,7 @@
 <html lang="ja" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>FxTwitter Archive Viewer - by Hikaproj</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +34,7 @@
       --border-dark: #CFD9DE;
       --text-main: #0F1419;
       --text-sub: #536471;
-      --header-bg: rgba(255, 255, 255, 0.85);
+      --header-bg: rgba(255, 255, 255, 0.88);
       --card-hover: rgba(0, 0, 0, 0.03);
     }
 
@@ -46,7 +46,7 @@
       --border-dark: #536471;
       --text-main: #F7F9F9;
       --text-sub: #8B98A5;
-      --header-bg: rgba(21, 32, 43, 0.85);
+      --header-bg: rgba(21, 32, 43, 0.88);
       --card-hover: rgba(255, 255, 255, 0.03);
     }
 
@@ -58,7 +58,7 @@
       --border-dark: #536471;
       --text-main: #E7E9EA;
       --text-sub: #71767B;
-      --header-bg: rgba(0, 0, 0, 0.85);
+      --header-bg: rgba(0, 0, 0, 0.88);
       --card-hover: rgba(255, 255, 255, 0.03);
     }
 
@@ -129,7 +129,7 @@
       gap: 16px;
       padding: 12px 16px;
       border-radius: 9999px;
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 600;
       color: var(--text-main);
       cursor: pointer;
@@ -137,8 +137,8 @@
       user-select: none;
     }
     .nav-item:hover { background-color: var(--bg-surface-hover); }
-    .nav-item.active { font-weight: 800; }
-    .nav-item svg { width: 24px; height: 24px; flex-shrink: 0; }
+    .nav-item.active { font-weight: 800; color: var(--accent); }
+    .nav-item svg { width: 22px; height: 22px; flex-shrink: 0; }
 
     .theme-picker {
       padding-top: 16px;
@@ -198,108 +198,164 @@
       padding: 10px 16px;
       display: flex;
       align-items: center;
-      gap: 20px;
+      justify-content: space-between;
       border-bottom: 1px solid var(--border);
     }
 
+    .header-titles {
+      display: flex;
+      flex-direction: column;
+    }
     .header-user-name {
       font-size: 18px;
       font-weight: 800;
-      display: block;
+      line-height: 1.2;
     }
     .header-post-count {
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-sub);
     }
 
-    /* Profile Header Section */
-    .profile-hero {
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
+    /* Mobile Header Action */
+    .mobile-file-btn {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      background-color: var(--accent);
+      color: #FFF;
+      font-size: 12px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
     }
 
+    /* Profile Hero Header */
+    .profile-hero {
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid var(--border);
+    }
     .profile-banner {
       width: 100%;
-      height: 190px;
-      background-color: var(--bg-surface);
+      height: 200px;
+      background-color: var(--border-dark);
       overflow: hidden;
     }
-    .profile-banner img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-banner img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
     .profile-body {
-      padding: 12px 16px;
+      padding: 0 16px 16px 16px;
       position: relative;
     }
-
     .profile-avatar-wrap {
-      margin-top: -65px;
-      width: 110px;
-      height: 110px;
+      width: 134px;
+      height: 134px;
       border-radius: 50%;
       border: 4px solid var(--bg);
-      background-color: var(--bg-surface);
+      margin-top: -67px;
+      background-color: var(--bg);
       overflow: hidden;
-      margin-bottom: 12px;
+      position: relative;
+      flex-shrink: 0;
     }
-    .profile-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-avatar-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
     .profile-names-row {
+      margin-top: 10px;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+    }
+    .p-display-name {
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .p-handle {
+      font-size: 14px;
+      color: var(--text-sub);
+      font-family: var(--font-mono);
     }
 
-    .p-display-name { font-weight: 800; font-size: 19px; display: inline-flex; align-items: center; gap: 4px; }
-    .p-handle { color: var(--text-sub); font-size: 14px; font-family: var(--font-mono); }
-    .p-bio { margin-top: 10px; font-size: 14px; line-height: 1.45; color: var(--text-main); white-space: pre-wrap; }
+    .p-bio {
+      margin-top: 12px;
+      font-size: 14.5px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
 
     .p-meta-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
-      margin-top: 10px;
-      font-size: 13px;
+      gap: 12px;
+      margin-top: 12px;
+      font-size: 13.5px;
       color: var(--text-sub);
     }
-    .p-meta-item { display: inline-flex; align-items: center; gap: 4px; }
-    .p-meta-item svg { width: 15px; height: 15px; }
+    .p-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .p-meta-item svg { width: 16px; height: 16px; }
 
     .p-counts-row {
       display: flex;
-      gap: 18px;
+      gap: 16px;
       margin-top: 12px;
-      font-size: 13px;
+      font-size: 14px;
+      color: var(--text-sub);
     }
-    .p-counts-row span strong { color: var(--text-main); font-weight: 700; }
-    .p-counts-row span { color: var(--text-sub); }
+    .p-counts-row strong {
+      color: var(--text-main);
+      font-weight: 700;
+    }
 
-    /* Feed Navigation Tabs */
     .profile-nav-tabs {
       display: flex;
-      border-bottom: 1px solid var(--border);
-      background-color: var(--bg);
+      border-top: 1px solid var(--border);
+      margin-top: 16px;
     }
     .profile-nav-tab {
       flex: 1;
       text-align: center;
       padding: 14px 0;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 14.5px;
       color: var(--text-sub);
       cursor: pointer;
-      border-bottom: 3px solid transparent;
-      transition: all 0.15s;
+      position: relative;
+      transition: background 0.15s;
     }
-    .profile-nav-tab:hover { background-color: var(--bg-surface-hover); color: var(--text-main); }
+    .profile-nav-tab:hover { background-color: var(--bg-surface-hover); }
     .profile-nav-tab.active {
       color: var(--text-main);
-      border-bottom-color: var(--accent);
-      font-weight: 800;
+      font-weight: 700;
+    }
+    .profile-nav-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 56px;
+      height: 4px;
+      background-color: var(--accent);
+      border-radius: 9999px;
     }
 
     /* --------------------------------------------------------------------------
-       X (Twitter) Tweet Items & Reposts
+       Tweets Stream & Authentic Tweet Card Layout
        -------------------------------------------------------------------------- */
     .tweets-stream {
       display: flex;
@@ -307,41 +363,32 @@
     }
 
     .tweet-item {
-      padding: 12px 16px;
+      padding: 14px 16px;
       border-bottom: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       cursor: pointer;
-      transition: background-color 0.15s;
+      transition: background 0.15s;
     }
     .tweet-item:hover { background-color: var(--card-hover); }
 
-    /* Repost Header Context Banner */
+    /* Repost Header Context (Green Retweet Icon Indented Above Avatar Column) */
     .tweet-context-row {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      margin-bottom: 6px;
+      padding-left: 32px;
       font-size: 13px;
       font-weight: 700;
       color: var(--text-sub);
-      margin-left: 36px;
-      margin-bottom: 6px;
     }
     .tweet-context-icon {
+      color: var(--retweet-green);
       display: flex;
       align-items: center;
-      color: var(--retweet-green);
     }
-    .tweet-context-icon svg {
-      width: 15px;
-      height: 15px;
-    }
-    .tweet-context-text {
-      color: var(--text-sub);
-    }
-    .tweet-context-row:hover .tweet-context-text {
-      text-decoration: underline;
-    }
+    .tweet-context-icon svg { width: 15px; height: 15px; }
 
     /* Reply Subheader */
     .tweet-reply-row {
@@ -349,95 +396,92 @@
       color: var(--text-sub);
       margin-bottom: 4px;
     }
-    .tweet-reply-row span {
-      color: var(--accent);
-    }
+    .tweet-reply-row span { color: var(--accent); }
 
-    /* Tweet Main Body Row */
+    /* Tweet Body Row: Avatar + Content */
     .tweet-main-body {
       display: flex;
       gap: 12px;
-      width: 100%;
     }
 
     .tweet-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 9999px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
       object-fit: cover;
       flex-shrink: 0;
-      background-color: var(--bg-surface);
+      background-color: var(--border-dark);
     }
 
     .tweet-content {
       flex: 1;
       min-width: 0;
-      display: flex;
-      flex-direction: column;
     }
 
     .tweet-author-line {
       display: flex;
-      align-items: baseline;
-      gap: 5px;
-      font-size: 14.5px;
+      align-items: center;
+      gap: 4px;
       flex-wrap: wrap;
+      margin-bottom: 2px;
     }
-    .t-author-name { font-weight: 700; color: var(--text-main); }
-    .t-author-handle { color: var(--text-sub); font-size: 14px; }
+    .t-author-name {
+      font-weight: 700;
+      font-size: 14.5px;
+      color: var(--text-main);
+    }
+    .t-author-handle {
+      color: var(--text-sub);
+      font-size: 14px;
+      font-family: var(--font-mono);
+    }
     .t-dot { color: var(--text-sub); font-size: 13px; }
     .t-date { color: var(--text-sub); font-size: 14px; }
 
     .tweet-text {
-      font-size: 15px;
+      font-size: 14.5px;
       line-height: 1.45;
-      color: var(--text-main);
-      word-break: break-word;
       white-space: pre-wrap;
-      margin-top: 4px;
+      word-break: break-word;
+      color: var(--text-main);
+      margin-top: 2px;
     }
 
     /* Media Frames */
     .tweet-media-frame {
       margin-top: 10px;
       border-radius: 16px;
-      border: 1px solid var(--border);
       overflow: hidden;
-      max-height: 440px;
+      border: 1px solid var(--border-dark);
       display: grid;
       gap: 2px;
-      background-color: var(--border);
+      max-height: 400px;
+      background-color: var(--bg-surface);
     }
-
-    .media-grid-1 { grid-template-columns: 1fr; }
-    .media-grid-2 { grid-template-columns: 1fr 1fr; }
-    .media-grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-    .media-grid-3 img:first-child { grid-row: 1 / span 2; }
-    .media-grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .tweet-media-frame.media-grid-1 { grid-template-columns: 1fr; }
+    .tweet-media-frame.media-grid-2 { grid-template-columns: 1fr 1fr; }
+    .tweet-media-frame.media-grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .tweet-media-frame.media-grid-3 img:first-child { grid-row: 1 / -1; }
+    .tweet-media-frame.media-grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 
     .tweet-media-frame img, .tweet-media-frame video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       max-height: 400px;
-      display: block;
-      background-color: var(--bg-surface);
     }
 
-    /* Quote Tweet Box */
+    /* Quote Box */
     .quote-box {
       margin-top: 10px;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border-dark);
       border-radius: 16px;
       padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      background-color: transparent;
-      transition: background 0.15s;
+      background-color: var(--bg-surface);
     }
-    .quote-box:hover { background-color: var(--card-hover); }
-
     .quote-header {
       display: flex;
       align-items: center;
@@ -447,48 +491,53 @@
     .quote-avatar {
       width: 20px;
       height: 20px;
-      border-radius: 9999px;
+      border-radius: 50%;
       object-fit: cover;
     }
     .quote-author-name { font-weight: 700; color: var(--text-main); }
-    .quote-author-handle, .quote-dot, .quote-date { color: var(--text-sub); font-size: 13px; }
+    .quote-author-handle { color: var(--text-sub); font-family: var(--font-mono); }
     .quote-text {
-      font-size: 14px;
-      line-height: 1.4;
+      font-size: 13.5px;
       color: var(--text-main);
+      line-height: 1.4;
       white-space: pre-wrap;
-      word-break: break-word;
     }
 
-    /* Action Counters */
+    /* Action Buttons Row */
     .tweet-actions-bar {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      max-width: 460px;
-      margin-top: 10px;
+      max-width: 440px;
+      margin-top: 12px;
       color: var(--text-sub);
       font-size: 13px;
     }
     .action-badge {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 6px;
       cursor: pointer;
-      transition: color 0.15s;
+      padding: 4px 8px;
+      border-radius: 9999px;
+      transition: all 0.15s;
     }
-    .action-badge svg { width: 16px; height: 16px; }
-    .action-badge:hover { color: var(--accent); }
-    .action-badge.repost:hover { color: var(--retweet-green); }
-    .action-badge.like:hover { color: var(--like-pink); }
-    .action-badge.export:hover { color: var(--accent-hover); }
+    .action-badge svg { width: 17px; height: 17px; }
+    .action-badge:hover { color: var(--accent); background-color: rgba(29, 155, 240, 0.1); }
+    .action-badge.repost:hover { color: var(--retweet-green); background-color: rgba(0, 186, 124, 0.1); }
+    .action-badge.like:hover { color: var(--like-pink); background-color: rgba(249, 24, 128, 0.1); }
+    .action-badge.export {
+      color: var(--accent);
+      font-weight: 600;
+      border: 1px solid rgba(29, 155, 240, 0.3);
+    }
 
     /* --------------------------------------------------------------------------
-       Right Sidebar
+       Right Sidebar (Search & Archive Filters)
        -------------------------------------------------------------------------- */
     .x-sidebar-right {
-      flex: 1;
-      max-width: 380px;
-      padding: 12px 20px;
+      width: 350px;
+      padding: 12px 24px;
       position: sticky;
       top: 0;
       height: 100vh;
@@ -565,7 +614,24 @@
       text-align: center;
       color: var(--text-sub);
       font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
     }
+
+    .btn-demo-load {
+      padding: 8px 16px;
+      border-radius: 9999px;
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-dark);
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-demo-load:hover { background-color: var(--bg-surface-hover); border-color: var(--accent); }
 
     /* Toast Notification */
     .toast {
@@ -580,38 +646,162 @@
       font-size: 14px;
       font-weight: 600;
       box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-      z-index: 1000;
+      z-index: 2000;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s;
     }
     .toast.show { opacity: 1; }
+
+    /* ==========================================================================
+       RESPONSIVE DESIGN (Desktop, Tablet, Mobile Phone)
+       ========================================================================== */
+    @media (max-width: 1024px) {
+      .x-sidebar-right {
+        display: none;
+      }
+      .x-app {
+        justify-content: center;
+      }
+      .x-sidebar-left {
+        width: 72px;
+        padding: 12px 8px;
+        align-items: center;
+      }
+      .x-logo-badge, .nav-item span, .theme-picker .theme-label, .x-credits-text {
+        display: none;
+      }
+      .nav-item {
+        justify-content: center;
+        padding: 10px;
+        width: 44px;
+        height: 44px;
+      }
+      .x-feed-column {
+        width: 600px;
+        max-width: calc(100vw - 72px);
+      }
+      .mobile-file-btn {
+        display: inline-flex;
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding-bottom: 60px;
+      }
+      .x-app {
+        flex-direction: column;
+        width: 100vw;
+        max-width: 100%;
+      }
+      .x-sidebar-right {
+        display: none;
+      }
+      .x-sidebar-left {
+        position: fixed;
+        bottom: 0;
+        top: auto;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 56px;
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        padding: 0 16px;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        background-color: var(--header-bg);
+        backdrop-filter: blur(16px);
+        z-index: 1000;
+      }
+      .x-sidebar-left > div:first-child {
+        display: flex;
+        width: 100%;
+        justify-content: space-around;
+        align-items: center;
+      }
+      .x-sidebar-left > div:last-child {
+        display: none;
+      }
+      .x-logo-wrap {
+        display: none;
+      }
+      .nav-list {
+        margin-top: 0;
+        flex-direction: row;
+        width: 100%;
+        justify-content: space-around;
+        gap: 0;
+      }
+      .nav-item {
+        padding: 8px;
+        font-size: 13px;
+        gap: 0;
+        border-radius: 50%;
+      }
+      .x-feed-column {
+        width: 100vw;
+        max-width: 100%;
+        border-right: none;
+        border-left: none;
+      }
+      .tweet-item {
+        padding: 12px;
+      }
+      .tweet-avatar {
+        width: 40px;
+        height: 40px;
+      }
+      .profile-banner {
+        height: 125px;
+      }
+      .profile-avatar-wrap {
+        width: 76px;
+        height: 76px;
+        margin-top: -38px;
+        border-width: 3px;
+      }
+      .p-display-name {
+        font-size: 18px;
+      }
+      .p-handle {
+        font-size: 13px;
+      }
+      .p-bio {
+        font-size: 13.5px;
+      }
+      .mobile-file-btn {
+        display: inline-flex;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="x-app">
-    <!-- Left Navigation Sidebar -->
+    <!-- Left Navigation Sidebar (Desktop Left / Mobile Bottom Navigation Bar) -->
     <aside class="x-sidebar-left">
       <div>
         <div class="x-logo-wrap" title="FxTwitter Archive Viewer">
-          <svg viewBox="0 0 24 24" fill="currentColor" style="width: 28px; height: 28px;">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="width: 26px; height: 26px;">
             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
           </svg>
           <span class="x-logo-badge">Viewer</span>
         </div>
 
         <nav class="nav-list">
-          <div class="nav-item active" data-view="all">
+          <div class="nav-item active" data-view="all" title="全ポスト">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-            ポスト
+            <span>ポスト</span>
           </div>
-          <div class="nav-item" data-view="media">
+          <div class="nav-item" data-view="media" title="画像・動画">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            メディア
+            <span>メディア</span>
           </div>
-          <div class="nav-item" data-view="replies">
+          <div class="nav-item" data-view="replies" title="返信">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-            返信
+            <span>返信</span>
           </div>
         </nav>
       </div>
@@ -626,7 +816,7 @@
             <button type="button" class="theme-btn" data-set-theme="dark">ダーク</button>
           </div>
         </div>
-        <div style="font-size: 11px; color: var(--text-sub); margin-top: 14px; line-height: 1.4;">
+        <div class="x-credits-text" style="font-size: 11px; color: var(--text-sub); margin-top: 14px; line-height: 1.4;">
           FxTwitter Archive Studio<br>Created by <strong>Hikaproj</strong>
         </div>
       </div>
@@ -639,6 +829,10 @@
           <span class="header-user-name" id="topHeaderName">X Archive</span>
           <span class="header-post-count" id="topHeaderSub">アーカイブを選択してください</span>
         </div>
+        <button type="button" class="mobile-file-btn" onclick="document.getElementById('filePicker').click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+          開く
+        </button>
       </header>
 
       <!-- Profile Header Area -->
@@ -672,7 +866,8 @@
       <!-- Tweets Stream Container -->
       <section id="tweetsList" class="tweets-stream">
         <div class="empty-notice">
-          右サイドバーから <strong>.xarchpjzip</strong> または <strong>.zip</strong> アーカイブを開いてください
+          <div>右サイドバーまたはボタンから <strong>.xarchpjzip</strong> や <strong>.zip</strong> アーカイブを開いてください</div>
+          <button type="button" class="btn-demo-load" id="btnLoadDemo">デモポストを表示して試す</button>
         </div>
       </section>
     </main>
@@ -704,7 +899,7 @@
         </p>
         <input type="file" id="filePicker" accept=".xarchpjzip,.zip,.json,.tar,.gz" style="display: none;">
         <div class="drop-zone" id="dropZone" onclick="document.getElementById('filePicker').click()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 28px; height: 28px; margin: 0 auto 6px; display: block; color: var(--accent);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 26px; height: 26px; margin: 0 auto 6px; display: block; color: var(--accent);">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
           <span style="font-size: 13px; font-weight: 700; color: var(--text-main);" id="dropZoneText">.xarchpjzip / .zip を選択</span>
@@ -728,23 +923,24 @@
 
   <script>
     // ==========================================================================
-    // Core Application State
+    // Standalone X Viewer Logic - Clean, Robust, High-Fidelity
     // ==========================================================================
-    const isTauri = Boolean(window.__TAURI__?.core?.invoke);
+    const isTauri = typeof window !== 'undefined' && Boolean(window.__TAURI__?.core?.invoke);
     let allTweets = [];
     let userProfile = null;
     let archiveSummary = null;
-    let currentFilterView = 'all'; // 'all', 'media', 'replies'
+    let currentFilterView = 'all'; // 'all' | 'media' | 'replies'
     const cachedBlobs = new Map();
 
     function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2500);
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
     }
 
-    // Theme Management (Light standard, Dim, Dark)
+    // Theme Switcher
     const themeButtons = document.querySelectorAll('.theme-btn');
     themeButtons.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -806,47 +1002,42 @@
       document.getElementById('dropZoneText').textContent = file.name;
       showToast(`アーカイブ読み込み中: ${file.name}`);
 
-      // Try Native Rust IPC first if running inside Tauri Desktop
-      if (isTauri && file.path) {
-        try {
-          const res = await window.__TAURI__.core.invoke('open_archive_native', { filePath: file.path });
-          if (res && res.success) {
-            allTweets = res.tweets || [];
-            userProfile = res.profile || null;
-            archiveSummary = res.summary || null;
-            cachedBlobs.clear();
-            renderAll(file.name, res.media_files?.length || 0);
-            showToast(`展開完了: ${allTweets.length} 件のポスト`);
-            return;
-          }
-        } catch (ipcErr) {
-          console.warn('Native open failed, falling back to JSZip client parser:', ipcErr);
-        }
-      }
-
-      // Browser JSZip Fallback (Supports .xarchpjzip and .zip)
       const name = file.name.toLowerCase();
-      if (name.endsWith('.zip') || name.endsWith('.xarchpjzip')) {
+
+      // Browser JSZip (Supports .xarchpjzip and .zip)
+      if (name.endsWith('.zip') || name.endsWith('.xarchpjzip') || file.type.includes('zip')) {
         try {
+          if (typeof JSZip === 'undefined') {
+            throw new Error('JSZip ライブラリをロードできませんでした');
+          }
+
           const zip = await JSZip.loadAsync(file);
           cachedBlobs.clear();
 
           // 1. tweets.json
-          const tweetsFile = Object.values(zip.files).find(f => f.name.endsWith('tweets.json') && !f.dir);
+          const tweetsFile = Object.values(zip.files).find(f => (f.name.endsWith('tweets.json') || f.name === 'tweets.json') && !f.dir);
           if (tweetsFile) {
             const jsonText = await tweetsFile.async('text');
-            allTweets = JSON.parse(jsonText);
+            const parsed = JSON.parse(jsonText);
+            if (Array.isArray(parsed)) {
+              allTweets = parsed;
+            } else if (parsed && Array.isArray(parsed.tweets)) {
+              allTweets = parsed.tweets;
+              if (!userProfile && parsed.profile) userProfile = parsed.profile;
+            } else {
+              allTweets = [];
+            }
           }
 
           // 2. profile.json
-          const profileFile = Object.values(zip.files).find(f => f.name.endsWith('profile.json') && !f.dir);
+          const profileFile = Object.values(zip.files).find(f => (f.name.endsWith('profile.json') || f.name === 'profile.json') && !f.dir);
           if (profileFile) {
             const jsonText = await profileFile.async('text');
             userProfile = JSON.parse(jsonText);
           }
 
           // 3. summary.json
-          const summaryFile = Object.values(zip.files).find(f => f.name.endsWith('summary.json') && !f.dir);
+          const summaryFile = Object.values(zip.files).find(f => (f.name.endsWith('summary.json') || f.name === 'summary.json') && !f.dir);
           if (summaryFile) {
             const jsonText = await summaryFile.async('text');
             archiveSummary = JSON.parse(jsonText);
@@ -861,12 +1052,14 @@
               const cleanKey = path.replace(/^.*?(media\/|profile_media\/)/, '$1');
               cachedBlobs.set(cleanKey, blobUrl);
               cachedBlobs.set(path, blobUrl);
+              cachedBlobs.set(path.split('/').pop(), blobUrl);
               mediaCount++;
             }
           }
 
           renderAll(file.name, mediaCount);
           showToast(`展開完了: ${allTweets.length} 件のポスト`);
+          return;
         } catch (err) {
           console.error(err);
           alert(`アーカイブ展開エラー: ${err.message}`);
@@ -874,12 +1067,21 @@
       } else if (name.endsWith('.json')) {
         try {
           const text = await file.text();
-          allTweets = JSON.parse(text);
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) {
+            allTweets = parsed;
+          } else if (parsed && Array.isArray(parsed.tweets)) {
+            allTweets = parsed.tweets;
+            userProfile = parsed.profile || null;
+          }
           renderAll(file.name, 0);
           showToast(`JSON読み込み完了: ${allTweets.length} 件`);
+          return;
         } catch (err) {
           alert(`JSONパースエラー: ${err.message}`);
         }
+      } else {
+        alert('対応していない形式です。.xarchpjzip, .zip, または .json を指定してください。');
       }
     }
 
@@ -888,14 +1090,16 @@
       if (cachedBlobs.has(pathOrUrl)) return cachedBlobs.get(pathOrUrl);
       const clean = pathOrUrl.replace(/^.*?(media\/|profile_media\/)/, '$1');
       if (cachedBlobs.has(clean)) return cachedBlobs.get(clean);
+      const fname = pathOrUrl.split('/').pop();
+      if (cachedBlobs.has(fname)) return cachedBlobs.get(fname);
       return pathOrUrl;
     }
 
     // Search and Filter Listeners
-    document.getElementById('searchInput').addEventListener('input', renderTweets);
-    document.getElementById('checkOnlyMedia').addEventListener('change', renderTweets);
-    document.getElementById('checkNoReplies').addEventListener('change', renderTweets);
-    document.getElementById('checkNoReposts').addEventListener('change', renderTweets);
+    document.getElementById('searchInput')?.addEventListener('input', renderTweets);
+    document.getElementById('checkOnlyMedia')?.addEventListener('change', renderTweets);
+    document.getElementById('checkNoReplies')?.addEventListener('change', renderTweets);
+    document.getElementById('checkNoReposts')?.addEventListener('change', renderTweets);
 
     function renderAll(fileName, mediaCount) {
       renderProfile();
@@ -903,7 +1107,7 @@
 
       if (fileName) {
         const infoPanel = document.getElementById('archiveInfoPanel');
-        infoPanel.style.display = 'block';
+        if (infoPanel) infoPanel.style.display = 'block';
         document.getElementById('infoFileName').textContent = fileName;
         document.getElementById('infoTotalTweets').textContent = `${allTweets.length.toLocaleString()} 件`;
         document.getElementById('infoMediaCount').textContent = `${mediaCount.toLocaleString()} 個`;
@@ -984,11 +1188,6 @@
       } else if (t.is_retweet) {
         isRepost = true;
         reposterName = userProfile?.name || userProfile?.screen_name || 'リポスト';
-      } else if (t.author?.screen_name && userProfile?.screen_name &&
-                 t.author.screen_name.toLowerCase() !== userProfile.screen_name.toLowerCase() &&
-                 !t.replying_to) {
-        isRepost = true;
-        reposterName = userProfile.name || userProfile.screen_name;
       }
 
       return { isRepost, reposterName, author, text };
@@ -996,10 +1195,10 @@
 
     function renderTweets() {
       const list = document.getElementById('tweetsList');
-      const query = document.getElementById('searchInput').value.toLowerCase().trim();
-      const onlyMedia = document.getElementById('checkOnlyMedia').checked;
-      const noReplies = document.getElementById('checkNoReplies').checked;
-      const noReposts = document.getElementById('checkNoReposts').checked;
+      const query = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+      const onlyMedia = document.getElementById('checkOnlyMedia')?.checked ?? false;
+      const noReplies = document.getElementById('checkNoReplies')?.checked ?? false;
+      const noReposts = document.getElementById('checkNoReposts')?.checked ?? false;
 
       let filtered = allTweets.filter(t => {
         const info = analyzeTweet(t);
@@ -1136,7 +1335,7 @@
                 </div>
                 <div class="action-badge export" title="ポストを高解像度画像 (PNG) として出力" onclick="event.stopPropagation(); exportTweetCard('${t.id}')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                  <span style="font-weight: 600;">画像出力</span>
+                  <span>画像出力</span>
                 </div>
               </div>
             </div>
@@ -1197,7 +1396,6 @@
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, width, height);
 
-      // Border
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = 1;
       ctx.strokeRect(0, 0, width, height);
@@ -1250,6 +1448,71 @@
         showToast(`画像を保存しました: tweet_${tweet.id}.png`);
       }, 'image/png');
     }
+
+    // Demo Data Loader
+    document.getElementById('btnLoadDemo')?.addEventListener('click', () => {
+      userProfile = {
+        name: "Hikaproj",
+        screen_name: "hikaproj",
+        description: "FxTwitter Archive Studio 開発者。Rust / WebKit / Node.js による超高速 Twitter(X) アーカイブ環境を提供。",
+        followers: 12800,
+        following: 256,
+        location: "Tokyo, Japan",
+        joined: "2020年4月",
+        avatar_url: "",
+        banner_url: ""
+      };
+      allTweets = [
+        {
+          id: "1900000000000000001",
+          created_at: new Date().toISOString(),
+          text: "FxTwitter Archive Studio v1.2.0 をリリースしました！\n完全ネイティブ Rust による超高速取得、独立 X ビューアー、スマホ対応レスポンシブデザインを搭載しています。",
+          author: { name: "Hikaproj", screen_name: "hikaproj" },
+          likes: 542,
+          retweets: 128,
+          replies: 16
+        },
+        {
+          id: "1900000000000000002",
+          created_at: new Date(Date.now() - 3600000).toISOString(),
+          text: "リポストも本家 X と完全に同じデザインで表示されます。元ツイートの著者名・アバター・本文が上に緑色リポストヘッダー付きで美しく整理されます。",
+          author: { name: "Twitter Dev", screen_name: "TwitterDev" },
+          reposted_by: { name: "Hikaproj", screen_name: "hikaproj" },
+          likes: 1240,
+          retweets: 350,
+          replies: 42
+        },
+        {
+          id: "1900000000000000003",
+          created_at: new Date(Date.now() - 7200000).toISOString(),
+          text: "各ツイートの「画像出力」ボタンを押すと、Retina 2x の高精度 Canvas レンダリングエンジンにより、綺麗なカード画像としてワンクリック保存できます！",
+          author: { name: "Hikaproj", screen_name: "hikaproj" },
+          likes: 310,
+          retweets: 55,
+          replies: 8
+        }
+      ];
+      renderAll('デモデータ (Hikaproj Sample)', 0);
+      showToast('デモデータを読み込みました');
+    });
+
+    // Auto-detect local tweets.json if opened in an exported directory
+    (async function checkLocalArchive() {
+      try {
+        const res = await fetch('tweets.json');
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json) && json.length > 0) {
+            allTweets = json;
+            try {
+              const pRes = await fetch('profile.json');
+              if (pRes.ok) userProfile = await pRes.json();
+            } catch (_) {}
+            renderAll('ローカル展開アーカイブ', 0);
+          }
+        }
+      } catch (_) {}
+    })();
 
     function escapeHtml(str) {
       if (!str) return '';

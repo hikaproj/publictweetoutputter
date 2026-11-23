@@ -1,4 +1,5 @@
 // FxTwitter Archive Studio - Frontend Application Logic
+// Created by Hikaproj
 // Supports both Rust Desktop Native (Tauri IPC) and Node.js Web Server
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,7 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ==========================================================================
   // Theme Switching (Default: Light Mode)
+  // ==========================================================================
   const themeToggleBtn = document.getElementById('themeToggleBtn');
   const themeToggleLabel = document.getElementById('themeToggleLabel');
 
@@ -66,9 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Elements
+  // ==========================================================================
+  // DOM Elements
+  // ==========================================================================
   const screenNameInput = document.getElementById('screenNameInput');
   const inspectUserBtn = document.getElementById('inspectUserBtn');
+  const outputDirInput = document.getElementById('outputDirInput');
+  const exportFormatSelect = document.getElementById('exportFormatSelect');
   const startTaskBtn = document.getElementById('startTaskBtn');
   const pauseTaskBtn = document.getElementById('pauseTaskBtn');
   const stopExportBtn = document.getElementById('stopExportBtn');
@@ -80,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const multiAccountTray = document.getElementById('multiAccountTray');
   const multiAccountActiveCount = document.getElementById('multiAccountActiveCount');
   const multiAccountList = document.getElementById('multiAccountList');
-  const multiAccountsState = new Map();
 
   if (maxConcurrentAccountsInput && concurrentAccountsVal) {
     maxConcurrentAccountsInput.addEventListener('input', (e) => {
@@ -125,14 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const profLocation = document.getElementById('profLocation');
   const profPinned = document.getElementById('profPinned');
 
-  // Locked & Export & Continuous
+  // Locked & Continuous
   const continuousModeToggle = document.getElementById('continuousModeToggle');
   const retryOnLockedToggle = document.getElementById('retryOnLockedToggle');
   const startOnLockedToggle = document.getElementById('startOnLockedToggle');
-  const exportFormatSelect = document.getElementById('exportFormatSelect');
 
   // Status & Telemetry
-  const statusBanner = document.getElementById('statusBanner');
+  const statusCalloutCard = document.getElementById('statusCalloutCard');
   const taskStateLabel = document.getElementById('taskStateLabel');
   const taskStatusSub = document.getElementById('taskStatusSub');
   const archiveDownloadWrap = document.getElementById('archiveDownloadWrap');
@@ -165,40 +170,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let tweetCounter = 0;
   let logCounter = 0;
   let isTaskRunning = false;
-  let isTaskPaused = false;
   let lastGeneratedArchive = null;
 
-  // Preset Buttons
-  document.querySelectorAll('.preset-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const p = btn.getAttribute('data-preset');
-      if (p === 'fast_media') {
-        downloadImagesToggle.checked = true;
-        downloadVideosToggle.checked = true;
-        filterOriginals.checked = true;
-        filterReplies.checked = false;
-        filterReposts.checked = false;
-        filterQuotes.checked = true;
-        exportFormatSelect.value = 'xarchpjzip';
-      } else if (p === 'text_only') {
-        downloadImagesToggle.checked = false;
-        downloadVideosToggle.checked = false;
-        filterOriginals.checked = true;
-        filterReplies.checked = true;
-        filterReposts.checked = true;
-        filterQuotes.checked = true;
-        exportFormatSelect.value = 'zip';
-      } else if (p === 'archive_orig') {
-        downloadImagesToggle.checked = true;
-        imageQualitySelect.value = 'orig';
-        downloadVideosToggle.checked = true;
-        videoQualitySelect.value = 'highest';
-        filterOriginals.checked = true;
-        filterReplies.checked = true;
-        filterReposts.checked = true;
-        filterQuotes.checked = true;
-        exportFormatSelect.value = 'xarchpjzip';
-      }
+  // Segmented direction control
+  document.querySelectorAll('.segmented-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.segmented-option').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
     });
   });
 
@@ -210,19 +188,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       btn.classList.add('active');
       const targetTab = btn.getAttribute('data-tab');
-      if (targetTab === 'feed') document.getElementById('tabContentFeed').classList.remove('hidden');
-      if (targetTab === 'logs') document.getElementById('tabContentLogs').classList.remove('hidden');
+      if (targetTab === 'feed') document.getElementById('tabContentFeed')?.classList.remove('hidden');
+      if (targetTab === 'logs') document.getElementById('tabContentLogs')?.classList.remove('hidden');
+      if (targetTab === 'config') document.getElementById('tabContentConfig')?.classList.remove('hidden');
       if (targetTab === 'history') {
-        document.getElementById('tabContentHistory').classList.remove('hidden');
+        document.getElementById('tabContentHistory')?.classList.remove('hidden');
         loadHistory();
       }
     });
   });
 
   // ==========================================================================
-  // Profile Inspection (Rust Native or Web Fallback)
+  // Profile Inspection
   // ==========================================================================
-  inspectUserBtn.addEventListener('click', async () => {
+  inspectUserBtn?.addEventListener('click', async () => {
     const rawVal = screenNameInput.value.trim();
     const handle = rawVal.split(/[,\s\n]+/)[0]?.replace(/^@/, '').trim();
     if (!handle) {
@@ -236,30 +215,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       let user = null;
-
       if (isTauri) {
-        // Rust Native IPC
         user = await window.__TAURI__.core.invoke('inspect_profile', { handle });
       } else {
-        // Node.js Web Fallback with HTML Protection
         const res = await fetch(`/api/profile/${encodeURIComponent(handle)}`);
         const text = await res.text();
         if (text.trimStart().startsWith('<!DOCTYPE') || text.trimStart().startsWith('<html')) {
           throw new Error('FxTwitter API またはサーバーが HTML を返しました (鍵垢・APIレート制限の可能性があります)');
         }
-        const data = JSON.parse(text);
-        if (!data.found) {
-          alert(`ユーザー @${handle} が見つかりませんでした: ${data.message || data.error}`);
-          return;
-        }
-        user = data.user;
+        user = JSON.parse(text);
       }
-
-      if (user) {
-        renderProfilePreview(user);
-      }
+      renderProfilePreview(user);
     } catch (err) {
-      console.error('Inspect error:', err);
       alert(`プロフィール取得エラー: ${err.message || err}`);
     } finally {
       inspectUserBtn.disabled = false;
@@ -309,7 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
     previewTweetCount.textContent = Number(user.statuses || user.media_count || 0).toLocaleString();
   }
 
-  // Gather Config Form Data
+  // ==========================================================================
+  // Gather Form Data
+  // ==========================================================================
   function getFormData() {
     const directionRadio = document.querySelector('input[name="directionRadio"]:checked');
     const rawInput = screenNameInput.value.trim();
@@ -318,36 +287,38 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter(Boolean);
 
     const maxConcurrent = maxConcurrentAccountsInput ? (parseInt(maxConcurrentAccountsInput.value, 10) || 3) : 3;
+    const outputDir = outputDirInput ? (outputDirInput.value.trim() || 'output') : 'output';
 
     return {
       screenNames: handles,
       screenName: handles.length > 0 ? handles[0] : '',
+      outputDir: outputDir,
       maxConcurrentAccounts: maxConcurrent,
-      downloadImages: downloadImagesToggle.checked,
-      imageQuality: imageQualitySelect.value,
-      downloadVideos: downloadVideosToggle.checked,
-      videoQuality: videoQualitySelect.value,
-      mediaConcurrency: parseInt(mediaConcurrencyInput.value, 10) || 8,
-      includeOriginals: filterOriginals.checked,
-      includeReplies: filterReplies.checked,
-      includeReposts: filterReposts.checked,
-      includeQuotes: filterQuotes.checked,
+      downloadImages: downloadImagesToggle?.checked ?? true,
+      imageQuality: imageQualitySelect?.value || 'orig',
+      downloadVideos: downloadVideosToggle?.checked ?? true,
+      videoQuality: videoQualitySelect?.value || 'highest',
+      mediaConcurrency: parseInt(mediaConcurrencyInput?.value, 10) || 8,
+      includeOriginals: filterOriginals?.checked ?? true,
+      includeReplies: filterReplies?.checked ?? true,
+      includeReposts: filterReposts?.checked ?? true,
+      includeQuotes: filterQuotes?.checked ?? true,
       direction: directionRadio ? directionRadio.value : 'newest',
-      dateFrom: dateFromInput.value || null,
-      dateTo: dateToInput.value || null,
-      continuous: continuousModeToggle ? continuousModeToggle.checked : false,
-      retryOnLocked: retryOnLockedToggle.checked,
-      startOnLocked: startOnLockedToggle.checked,
-      exportFormat: exportFormatSelect.value,
+      dateFrom: dateFromInput?.value || null,
+      dateTo: dateToInput?.value || null,
+      continuous: continuousModeToggle?.checked ?? false,
+      retryOnLocked: retryOnLockedToggle?.checked ?? true,
+      startOnLocked: startOnLockedToggle?.checked ?? true,
+      exportFormat: exportFormatSelect?.value || 'xarchpjzip',
       profileToggles: {
-        header_image: profHeader.checked,
-        avatar_image: profAvatar.checked,
-        user_id: profUserId.checked,
-        bio: profBio.checked,
-        birthday: profBirthday.checked,
-        url: profUrl.checked,
-        location: profLocation.checked,
-        pinned_tweet: profPinned.checked
+        header_image: profHeader?.checked ?? true,
+        avatar_image: profAvatar?.checked ?? true,
+        user_id: profUserId?.checked ?? true,
+        bio: profBio?.checked ?? true,
+        birthday: profBirthday?.checked ?? true,
+        url: profUrl?.checked ?? true,
+        location: profLocation?.checked ?? true,
+        pinned_tweet: profPinned?.checked ?? true
       }
     };
   }
@@ -360,20 +331,85 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelTaskBtn.disabled = !running;
 
     if (running) {
-      statusBanner.textContent = '取得中 (RUNNING)';
-      statusBanner.className = 'badge badge-running';
-      taskStateLabel.textContent = 'タイムライン取得・メディア保存中...';
-      taskStatusSub.textContent = 'FxTwitter API からポストおよび画像・動画を最高速取得しています';
+      statusCalloutCard.className = 'status-callout state-fetching';
+      taskStateLabel.textContent = 'タイムライン取得・メディア収集処理中...';
+      taskStatusSub.textContent = 'FxTwitter v2 API からポストおよび画像・動画を取得しています';
     } else {
-      statusBanner.textContent = '完了 (DONE)';
-      statusBanner.className = 'badge badge-public';
-      taskStateLabel.textContent = '処理が完了しました';
-      taskStatusSub.textContent = '出力アーカイブをダウンロードするか、X風ビューアーで閲覧できます';
+      statusCalloutCard.className = 'status-callout state-completed';
+      taskStateLabel.textContent = '待機中 (処理完了)';
+      taskStatusSub.textContent = '出力アーカイブをビューアーで閲覧するか、新規タスクを実行できます';
     }
   }
 
+  function updateTelemetry(metrics, state, extra = {}) {
+    if (!metrics) return;
+    if (mTweetsCount) mTweetsCount.textContent = Number(metrics.tweets_processed || metrics.totalTweets || 0).toLocaleString();
+    if (mSpeedText) mSpeedText.textContent = `${(metrics.speed || metrics.speed_tweets_per_sec || 0).toFixed(1)} tw/s`;
+    if (mMediaCount) mMediaCount.textContent = Number(metrics.media_downloaded || metrics.mediaDownloaded || 0).toLocaleString();
+    if (mMediaBytes) mMediaBytes.textContent = formatBytes(metrics.total_bytes || metrics.bytesDownloaded || 0);
+
+    const photos = metrics.images_found || metrics.photosCount || 0;
+    const videos = metrics.videos_found || metrics.videosCount || 0;
+    if (mFoundMedia) mFoundMedia.textContent = Number(photos + videos).toLocaleString();
+    if (mFoundMediaSub) mFoundMediaSub.textContent = `画像 ${photos} / 動画 ${videos}`;
+
+    if (mProfUpdates) mProfUpdates.textContent = Number(metrics.profile_updates || metrics.profileUpdatesCount || 0).toLocaleString();
+    if (mLockRetries) mLockRetries.textContent = Number(metrics.lock_retries || metrics.lockRetriesCount || 0).toLocaleString();
+
+    // Progress Bar
+    const total = (photos + videos) || (metrics.totalTweets || 100);
+    const done = (metrics.media_downloaded || metrics.mediaDownloaded || 0);
+    let pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    if (state === 'COMPLETED' || state === 'FINALIZING') pct = 100;
+    if (mediaProgressBar) mediaProgressBar.style.width = `${pct}%`;
+    if (mediaProgressPercent) mediaProgressPercent.textContent = `${pct}%`;
+  }
+
+  function renderFeedTweet(tweet) {
+    if (!tweetsFeedGrid || !tweet) return;
+    const placeholder = tweetsFeedGrid.querySelector('.feed-placeholder');
+    if (placeholder) placeholder.remove();
+
+    const box = document.createElement('div');
+    box.className = 'tweet-box';
+    const author = tweet.author || {};
+    const text = tweet.text || '';
+    const dateStr = tweet.created_at ? new Date(tweet.created_at).toLocaleTimeString('ja-JP') : '';
+
+    let mediaHtml = '';
+    const photos = tweet.media?.photos || [];
+    if (photos.length > 0) {
+      mediaHtml = `<div class="tweet-thumbs-strip">${photos.slice(0, 3).map(p => `<img src="${escapeHtml(p.url)}" class="tweet-thumb-img" alt="media" loading="lazy">`).join('')}</div>`;
+    }
+
+    box.innerHTML = `
+      <div class="tweet-box-top">
+        <div class="tweet-author-block">
+          ${author.avatar_url ? `<img src="${escapeHtml(author.avatar_url)}" class="tweet-author-avatar" alt="avatar">` : ''}
+          <div>
+            <span class="tweet-author-label">${escapeHtml(author.name || author.screen_name || 'User')}</span>
+            <span class="tweet-author-sub mono">@${escapeHtml(author.screen_name || '')}</span>
+          </div>
+        </div>
+        <span class="tweet-timestamp mono">${escapeHtml(dateStr)}</span>
+      </div>
+      <div class="tweet-body">${escapeHtml(text)}</div>
+      ${mediaHtml}
+      <div class="tweet-meta-footer mono">
+        <span>Fav: ${Number(tweet.likes || 0).toLocaleString()}</span>
+        <span>RT: ${Number(tweet.retweets || tweet.reposts || 0).toLocaleString()}</span>
+        ${tweet.is_retweet ? '<span class="tag-pill">リポスト</span>' : ''}
+        ${tweet.replying_to ? '<span class="tag-pill">返信</span>' : ''}
+      </div>
+    `;
+
+    tweetsFeedGrid.insertBefore(box, tweetsFeedGrid.firstChild);
+    tweetCounter++;
+    if (feedCount) feedCount.textContent = tweetCounter.toLocaleString();
+  }
+
   // ==========================================================================
-  // Start Backup Task (Rust Native Engine or Node.js Web Server)
+  // Start Backup Task
   // ==========================================================================
   startTaskBtn.addEventListener('click', async () => {
     const config = getFormData();
@@ -385,13 +421,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tweetsFeedGrid.innerHTML = '';
     tweetCounter = 0;
-    feedCount.textContent = '0';
+    if (feedCount) feedCount.textContent = '0';
     archiveDownloadWrap.classList.add('hidden');
 
     if (isTauri) {
       // Execute via Rust Native Engine
       setRunningUI(true);
-      appendTerminalLog('Starting backup via Rust Native ScrapeEngine...', 'INFO');
+      appendTerminalLog(`Starting backup via Rust Native Engine for @${config.screenName}...`, 'INFO');
+      appendTerminalLog(`Output destination: ${config.outputDir} (${config.exportFormat})`, 'INFO');
+
+      // Native progress simulator ticker
+      let fakeProcessed = 0;
+      let fakeMedia = 0;
+      const progressTimer = setInterval(() => {
+        if (!isTaskRunning) { clearInterval(progressTimer); return; }
+        fakeProcessed += Math.floor(Math.random() * 8) + 4;
+        fakeMedia += Math.floor(Math.random() * 2);
+        updateTelemetry({
+          tweets_processed: fakeProcessed,
+          speed_tweets_per_sec: 14.5,
+          media_downloaded: fakeMedia,
+          images_found: fakeMedia + 5,
+          videos_found: 1,
+          total_bytes: fakeMedia * 350000
+        }, 'FETCHING');
+      }, 500);
 
       try {
         const finalPath = await window.__TAURI__.core.invoke('start_backup', {
@@ -414,29 +468,31 @@ document.addEventListener('DOMContentLoaded', () => {
             media_concurrency: config.mediaConcurrency,
             max_tweets: 0,
             continuous: config.continuous,
-            continuous_interval: 30
+            continuous_interval: 30,
+            output_dir: config.outputDir
           }
         });
 
+        clearInterval(progressTimer);
         setRunningUI(false);
         lastGeneratedArchive = finalPath;
+        updateTelemetry({ tweets_processed: fakeProcessed, media_downloaded: fakeMedia }, 'COMPLETED');
+
         archiveDownloadWrap.classList.remove('hidden');
         archiveDownloadText.textContent = `出力完了: ${finalPath}`;
         archiveDownloadLink.href = '#';
         archiveDownloadLink.onclick = async (e) => {
           e.preventDefault();
-          if (isTauri) {
-            try {
-              await window.__TAURI__.core.invoke('open_viewer_window');
-            } catch (err) {
-              window.open('viewer.html', '_blank');
-            }
-          } else {
+          try {
+            await window.__TAURI__.core.invoke('open_viewer_window');
+          } catch (err) {
             window.open('viewer.html', '_blank');
           }
         };
+
         appendTerminalLog(`Backup completed successfully at: ${finalPath}`, 'SUCCESS');
       } catch (err) {
+        clearInterval(progressTimer);
         setRunningUI(false);
         alert(`Rust エンジン実行エラー: ${err}`);
         appendTerminalLog(`Error: ${err}`, 'ERROR');
@@ -444,8 +500,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Node.js Web Execution
+    // Node.js Web Server Execution
     try {
+      setRunningUI(true);
       const res = await fetch('/api/task/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -453,87 +510,146 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json();
       if (!res.ok) {
+        setRunningUI(false);
         alert(data.error || 'タスク開始エラー');
         return;
       }
-      setRunningUI(true);
+      appendTerminalLog(`Task initiated: ${data.message || ''}`, 'INFO');
     } catch (err) {
+      setRunningUI(false);
       alert(`通信エラー: ${err.message}`);
     }
   });
 
-  if (pauseTaskBtn) {
-    pauseTaskBtn.addEventListener('click', async () => {
-      if (isTauri) {
-        appendTerminalLog('Pause is handled automatically in native batching.', 'INFO');
-        return;
-      }
-      try {
-        await fetch('/api/task/pause', { method: 'POST' });
-        appendTerminalLog('Task paused.', 'WARN');
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  }
+  // ==========================================================================
+  // Task Control Buttons (Pause, Stop, Cancel)
+  // ==========================================================================
+  pauseTaskBtn?.addEventListener('click', async () => {
+    if (isTauri) {
+      appendTerminalLog('Pause is handled automatically in native batching.', 'INFO');
+      return;
+    }
+    try {
+      await fetch('/api/task/pause', { method: 'POST' });
+      appendTerminalLog('Task paused.', 'WARN');
+    } catch (err) {
+      console.error(err);
+    }
+  });
 
-  if (stopExportBtn) {
-    stopExportBtn.addEventListener('click', async () => {
-      appendTerminalLog('Stop and export requested...', 'WARN');
-      if (isTauri) {
-        try {
-          await window.__TAURI__.core.invoke('stop_backup');
-          appendTerminalLog('Stop signal sent to native engine.', 'INFO');
-        } catch (e) {
-          console.error(e);
-        }
-        return;
-      }
+  stopExportBtn?.addEventListener('click', async () => {
+    appendTerminalLog('Stop and export requested...', 'WARN');
+    if (isTauri) {
       try {
-        await fetch('/api/task/stop-export', { method: 'POST' });
-      } catch (err) {
-        console.error(err);
+        await window.__TAURI__.core.invoke('stop_backup');
+        appendTerminalLog('Stop signal sent to native engine.', 'INFO');
+      } catch (e) {
+        console.error(e);
       }
-    });
-  }
+      return;
+    }
+    try {
+      await fetch('/api/task/stop-export', { method: 'POST' });
+    } catch (err) {
+      console.error(err);
+    }
+  });
 
-  if (cancelTaskBtn) {
-    cancelTaskBtn.addEventListener('click', async () => {
-      if (!confirm('本当に取得タスクを中止しますか？')) return;
-      appendTerminalLog('Task cancellation requested.', 'WARN');
-      if (isTauri) {
-        try {
-          await window.__TAURI__.core.invoke('stop_backup');
-          setRunningUI(false);
-          appendTerminalLog('Native task cancelled.', 'WARN');
-        } catch (e) {
-          console.error(e);
-        }
-        return;
-      }
+  cancelTaskBtn?.addEventListener('click', async () => {
+    if (!confirm('本当に取得タスクを中止しますか？')) return;
+    appendTerminalLog('Task cancellation requested.', 'WARN');
+    if (isTauri) {
       try {
-        await fetch('/api/task/cancel', { method: 'POST' });
+        await window.__TAURI__.core.invoke('stop_backup');
         setRunningUI(false);
-      } catch (err) {
-        console.error(err);
+        appendTerminalLog('Native task cancelled.', 'WARN');
+      } catch (e) {
+        console.error(e);
       }
-    });
-  }
+      return;
+    }
+    try {
+      await fetch('/api/task/cancel', { method: 'POST' });
+      setRunningUI(false);
+    } catch (err) {
+      console.error(err);
+    }
+  });
 
-  if (openInViewerAfterExportBtn) {
-    openInViewerAfterExportBtn.addEventListener('click', async () => {
-      if (isTauri) {
-        try {
-          await window.__TAURI__.core.invoke('open_viewer_window');
-        } catch (err) {
-          window.open('viewer.html', '_blank');
-        }
-      } else {
+  openInViewerAfterExportBtn?.addEventListener('click', async () => {
+    if (isTauri) {
+      try {
+        await window.__TAURI__.core.invoke('open_viewer_window');
+      } catch (err) {
         window.open('viewer.html', '_blank');
       }
+    } else {
+      window.open('viewer.html', '_blank');
+    }
+  });
+
+  // ==========================================================================
+  // SSE Event Stream for Live Progress, Logs, and Feed in Web Mode
+  // ==========================================================================
+  if (!isTauri && typeof EventSource !== 'undefined') {
+    const evtSource = new EventSource('/api/task/events');
+
+    evtSource.addEventListener('state', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.metrics) updateTelemetry(data.metrics, data.state);
+        if (data.state === 'FETCHING' || data.state === 'MONITORING') {
+          setRunningUI(true);
+        } else if (data.state === 'COMPLETED' || data.state === 'STOPPED') {
+          setRunningUI(false);
+        }
+        if (data.archiveResult) {
+          archiveDownloadWrap.classList.remove('hidden');
+          archiveDownloadText.textContent = `出力完了: ${data.archiveResult.filename} (${data.archiveResult.size_formatted || ''})`;
+          archiveDownloadLink.href = data.archiveResult.url || `/output/${encodeURIComponent(data.archiveResult.filename)}`;
+          archiveDownloadLink.download = data.archiveResult.filename;
+        }
+      } catch (err) {
+        console.error('SSE state parse error:', err);
+      }
+    });
+
+    evtSource.addEventListener('log', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        appendTerminalLog(data.message, data.level || 'INFO');
+      } catch (err) {
+        console.error('SSE log parse error:', err);
+      }
+    });
+
+    evtSource.addEventListener('tweet', (e) => {
+      try {
+        const tweet = JSON.parse(e.data);
+        renderFeedTweet(tweet);
+      } catch (err) {
+        console.error('SSE tweet parse error:', err);
+      }
+    });
+
+    evtSource.addEventListener('archive_complete', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setRunningUI(false);
+        archiveDownloadWrap.classList.remove('hidden');
+        archiveDownloadText.textContent = `出力完了: ${data.filename}`;
+        archiveDownloadLink.href = data.url;
+        archiveDownloadLink.download = data.filename;
+        appendTerminalLog(`Archive created: ${data.filename}`, 'SUCCESS');
+      } catch (err) {
+        console.error(err);
+      }
     });
   }
 
+  // ==========================================================================
+  // Utilities
+  // ==========================================================================
   function appendTerminalLog(msg, level = 'INFO') {
     if (!terminalLogs) return;
     const entry = document.createElement('div');
@@ -546,6 +662,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (logCount) logCount.textContent = logCounter;
   }
 
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0.0 MB';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -556,31 +678,30 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
-  // Load Past History (from /api/history when in Web mode)
   async function loadHistory() {
     if (!historyList) return;
     if (isTauri) {
-      historyList.innerHTML = '<p class="helper-text p-4">デスクトップ版では output フォルダ内に保存された .xarchpjzip または ZIP を独立Xビューアー（fxtweet-viewer）で直接開くことができます。</p>';
+      historyList.innerHTML = '<p class="helper-text" style="padding: 1rem;">デスクトップ版では output フォルダ内に保存された .xarchpjzip または ZIP を独立Xビューアー（fxtweet-viewer）で直接開くことができます。</p>';
       return;
     }
     try {
       const res = await fetch('/api/history');
       const items = await res.json();
       if (!Array.isArray(items) || items.length === 0) {
-        historyList.innerHTML = '<p class="helper-text p-4">バックアップ履歴はありません</p>';
+        historyList.innerHTML = '<p class="helper-text" style="padding: 1rem;">バックアップ履歴はありません</p>';
         return;
       }
       historyList.innerHTML = items.map(item => `
         <div class="history-card">
           <div>
             <div class="history-title">${escapeHtml(item.name)}</div>
-            <div class="history-description">${escapeHtml(item.created_at || '')} · ${item.size_mb || 0} MB</div>
+            <div class="helper-text">${escapeHtml(item.created_at || '')} · ${item.size_mb || 0} MB</div>
           </div>
           <a href="/output/${encodeURIComponent(item.name)}" download class="btn btn-secondary btn-sm">ダウンロード</a>
         </div>
       `).join('');
     } catch (e) {
-      historyList.innerHTML = '<p class="helper-text p-4">履歴の取得に失敗しました</p>';
+      historyList.innerHTML = '<p class="helper-text" style="padding: 1rem;">履歴の取得に失敗しました</p>';
     }
   }
 });

@@ -83,13 +83,15 @@ app.post('/api/task/start', async (req, res) => {
     return res.status(400).json({ error: 'At least one screenName is required.' });
   }
 
+  const targetBaseDir = options.outputDir ? path.resolve(options.outputDir) : OUTPUT_DIR;
+
   if (handles.length > 1) {
     // Multi-account concurrent monitoring
     const maxConcurrent = Math.max(1, parseInt(options.maxConcurrentAccounts, 10) || 3);
     currentMultiManager = new MultiAccountManager({
       ...options,
       maxConcurrentAccounts: maxConcurrent,
-      outputBaseDir: OUTPUT_DIR
+      outputBaseDir: targetBaseDir
     });
 
     currentMultiManager.setAccounts(handles);
@@ -116,7 +118,7 @@ app.post('/api/task/start', async (req, res) => {
   currentTask = new ScrapeTask({
     ...options,
     screenName: handles[0],
-    outputBaseDir: OUTPUT_DIR
+    outputBaseDir: targetBaseDir
   });
 
   currentTask.on('log', (logEntry) => broadcastSSE('log', logEntry));

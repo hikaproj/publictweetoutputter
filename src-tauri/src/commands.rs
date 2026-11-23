@@ -31,7 +31,15 @@ pub(crate) async fn start_backup(
     state: State<'_, AppState>,
     config: ScrapeConfig,
 ) -> Result<String, String> {
-    let base_out = PathBuf::from("output");
+    let base_out = if let Some(ref custom) = config.output_dir {
+        if !custom.trim().is_empty() {
+            PathBuf::from(custom.trim())
+        } else {
+            PathBuf::from("output")
+        }
+    } else {
+        PathBuf::from("output")
+    };
     let eng = Arc::new(engine::ScrapeEngine::new(config, &base_out, None));
     {
         let mut lock = state.engine.lock().await;
@@ -107,8 +115,12 @@ pub(crate) async fn open_archive_native(file_path: String) -> Result<ArchivePayl
             if entry_name.ends_with("tweets.json") {
                 let mut buf = String::new();
                 if entry.read_to_string(&mut buf).is_ok() {
-                    if let Ok(v) = serde_json::from_str::<Vec<serde_json::Value>>(&buf) {
-                        tweets = v;
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&buf) {
+                        if let Some(arr) = v.as_array() {
+                            tweets = arr.clone();
+                        } else if let Some(arr) = v.get("tweets").and_then(|t| t.as_array()) {
+                            tweets = arr.clone();
+                        }
                     }
                 }
             } else if entry_name.ends_with("profile.json") {

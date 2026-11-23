@@ -41,7 +41,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if i + 1 < args.len() { config.max_tweets = args[i + 1].parse().unwrap_or(0); i += 1; }
             }
             "--out" | "-o" => {
-                if i + 1 < args.len() { base_out = PathBuf::from(&args[i + 1]); i += 1; }
+                if i + 1 < args.len() {
+                    base_out = PathBuf::from(&args[i + 1]);
+                    config.output_dir = Some(args[i + 1].clone());
+                    i += 1;
+                }
             }
             "--help" | "-h" => {
                 print_help();
