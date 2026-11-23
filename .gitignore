@@ -31,3 +31,9 @@ desktop.ini
 
 # Agent skills cache
 .agent/
+
+# Local handover & project context (Excluded from git upload)
+PROJECT_INFO.md
+HANDOVER.md
+.context/
+
