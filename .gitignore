@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Rust build target
+target/
+Cargo.lock
+
+# Application outputs & archives
+output/
+dist/
+*.zip
+*.tar.gz
+*.tar
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment & editor
+.env
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Agent skills cache
+.agent/

@@ -1,0 +1,253 @@
+name: Release Multiplatform Build & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 1. Package Node.js Standalone Distribution
+  # --------------------------------------------------------------------------
+  package-nodejs:
+    name: Package Node.js Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install production dependencies
+        run: npm ci --omit=dev || npm install --omit=dev
+
+      - name: Create Clean Node.js Distribution Package
+        run: |
+          DIST_NAME="fxtweet-studio-nodejs-v${{ steps.get_version.outputs.VERSION }}"
+          mkdir -p dist/${DIST_NAME}
+          
+          # Copy essential runtime files (excluding tests, output, git, caches)
+          cp -r lib public server.js cli.js package.json package-lock.json README.md Dockerfile docker-compose.yml install.sh install.ps1 dist/${DIST_NAME}/
+          
+          # Include node_modules for true out-of-the-box offline execution
+          cp -r node_modules dist/${DIST_NAME}/
+          
+          cd dist
+          zip -r "${DIST_NAME}.zip" "${DIST_NAME}"
+          tar -czf "${DIST_NAME}.tar.gz" "${DIST_NAME}"
+          sha256sum "${DIST_NAME}.zip" > "${DIST_NAME}.zip.sha256"
+
+      - name: Upload Node.js Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodejs-dist
+          path: dist/*.zip*
+
+  # --------------------------------------------------------------------------
+  # 2. Build Desktop Binaries (Windows, macOS, Linux Debian & Arch)
+  # --------------------------------------------------------------------------
+  build-desktop:
+    name: Build Desktop (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: macos-universal
+            os: macos-latest
+            target: universal-apple-darwin
+          - platform: linux-x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js & Rust toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux dependencies (Ubuntu/Debian)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev build-essential
+
+      - name: Install Rust Dependencies & Build Standalone CLI
+        working-directory: src-tauri
+        run: |
+          cargo build --release --bin fxtweet-cli
+
+      - name: Package Desktop Artifacts (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir release-bin
+          cp src-tauri/target/release/fxtweet-cli.exe release-bin/
+          Compress-Archive -Path release-bin/* -DestinationPath fxtweet-studio-windows-cli.zip
+
+      - name: Package Desktop Artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir release-bin
+          cp src-tauri/target/release/fxtweet-cli release-bin/
+          tar -czf fxtweet-studio-macos-cli.tar.gz -C release-bin fxtweet-cli
+
+      - name: Package Desktop Artifacts (Linux / Debian / Arch)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release-bin
+          cp src-tauri/target/release/fxtweet-cli release-bin/
+          tar -czf fxtweet-studio-linux-cli.tar.gz -C release-bin fxtweet-cli
+          
+          # Arch Linux PKGBUILD generation
+          cat << 'EOF' > release-bin/PKGBUILD
+          pkgname=fxtweet-studio-bin
+          pkgver=1.0.0
+          pkgrel=1
+          pkgdesc="Ultra-fast Twitter/X bulk post and media archive studio by Hikaproj"
+          arch=('x86_64')
+          url="https://github.com/Hikaproj/publictweetoutputter"
+          license=('MIT')
+          depends=('webkit2gtk-4.1' 'gtk3' 'openssl')
+          source=("fxtweet-studio-linux-cli.tar.gz")
+          package() {
+              install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-studio"
+          }
+          EOF
+          tar -czf fxtweet-studio-arch-package.tar.gz -C release-bin PKGBUILD fxtweet-cli
+
+      - name: Upload Platform Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: |
+            *.zip
+            *.tar.gz
+
+  # --------------------------------------------------------------------------
+  # 3. Create GitHub Release with Semantic Versioning and Attachments
+  # --------------------------------------------------------------------------
+  publish-release:
+    name: Publish GitHub Release (by Hikaproj)
+    needs: [package-nodejs, build-desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "TAG=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Copy Installers & Manifests to Release Assets
+        run: |
+          cp install.sh release-assets/
+          cp install.ps1 release-assets/
+          cp docker-compose.yml release-assets/
+          cp Dockerfile release-assets/
+
+      - name: Generate Checksums
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt || true
+          ls -la
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.TAG }}
+          name: "Release ${{ steps.get_version.outputs.VERSION }} - FxTwitter Archive Studio"
+          body: |
+            ## FxTwitter Archive Studio ${{ steps.get_version.outputs.VERSION }}
+            *Created by **Hikaproj***
+            
+            ### Quick Install & Run (Linux / macOS / Windows):
+            ```bash
+            # Linux (Debian, Arch, Ubuntu, Fedora) & macOS (Intel & Apple Silicon)
+            curl -fsSL https://raw.githubusercontent.com/Hikaproj/publictweetoutputter/main/install.sh | bash
+            
+            # Windows PowerShell (x86_64 / arm64)
+            irm https://raw.githubusercontent.com/Hikaproj/publictweetoutputter/main/install.ps1 | iex
+            
+            # Docker / Docker Compose
+            docker compose up -d
+            ```
+            
+            ### Included Packages & Platforms:
+            - **Universal CLI Installers**:
+              - `install.sh` (Linux + macOS universal installer & portal runner)
+              - `install.ps1` (Windows PowerShell auto-installer)
+            - **Node.js Edition** (Portable, zero-install Web & CLI suite):
+              - `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.zip`
+            - **Windows Desktop & CLI** (Windows 10/11 x86_64):
+              - `fxtweet-studio-windows-cli.zip`
+            - **macOS Desktop & CLI** (macOS 10.15+, Universal Binary):
+              - `fxtweet-studio-macos-cli.tar.gz`
+            - **Linux / Debian / Ubuntu** (Debian, Ubuntu 20.04/22.04/24.04):
+              - `fxtweet-studio-linux-cli.tar.gz`
+            - **Arch Linux** (Standalone binary + PKGBUILD):
+              - `fxtweet-studio-arch-package.tar.gz`
+            - **Container Support**:
+              - `Dockerfile` & `docker-compose.yml`
+            
+            ### Key Features:
+            - **Ultra-Fast Ingestion**: High-speed public tweet and media exporter powered by FixTweet / FxTwitter v2 API.
+            - **Multi-Account Concurrent Monitoring**: Monitor and archive multiple Twitter/X accounts concurrently (`@user1, @user2, ...`) with configurable concurrency (1-10 accounts).
+            - **Continuous Monitoring Mode ("常時監視モード")**: Keep running indefinitely, polling and auto-appending new posts and profile updates in real-time.
+            - **Locked Account Resilience**: Automatic polling and recovery when accounts turn private and public again, with zero data loss.
+            - **Comprehensive Formats**: `.zip`, `.tar.gz`, `.tar`, folder, and native `.xarchpjzip` format.
+            - **Authentic X-Like Offline Viewer**:
+              - Light (default), Dim, and Dark modes.
+              - Direct `.zip` and `.xarchpjzip` archive decompression & browsing.
+              - One-click high-resolution Tweet Card Image Export (PNG).
+            - **Clean Precision Design**: Zero emojis, pure SVG vector line icons, high contrast.
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

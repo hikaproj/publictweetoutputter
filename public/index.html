@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FxTwitter Archive Studio - 高速ポスト・メディア一括取得</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Navigation Bar (Quiet 48px Header) -->
+    <header class="navbar">
+      <div class="nav-brand">
+        <div class="brand-badge">fx</div>
+        <div class="brand-text">
+          <span class="brand-title">FxTwitter Archive Studio</span>
+          <span class="brand-tag">v1.2</span>
+        </div>
+      </div>
+
+      <div class="nav-status">
+        <button type="button" id="themeToggleBtn" class="btn btn-secondary btn-sm" style="height: 24px; padding: 0 0.5rem;" title="外観テーマ切り替え">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+          <span id="themeToggleLabel">ダーク</span>
+        </button>
+        <a href="/viewer.html" target="_blank" class="btn btn-secondary btn-sm" style="height: 24px; padding: 0 0.5rem; text-decoration: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+          X風ビューアー
+        </a>
+        <span class="status-indicator-dot" id="connection-dot"></span>
+        <span id="connection-text" class="mono">API CONNECTED</span>
+      </div>
+    </header>
+
+    <main class="main-container">
+      <!-- Target Input & Primary Commands -->
+      <section class="card target-strip-card">
+        <div class="target-row">
+          <div class="input-container" style="flex: 1;">
+            <span class="input-prefix">@</span>
+            <input type="text" id="screenNameInput" class="text-input" placeholder="ユーザー名 (複数指定可: @user1, @user2, @user3...)" autocomplete="off" spellcheck="false">
+            <button id="inspectUserBtn" class="btn-inline-inspect" type="button">プロフィール確認</button>
+          </div>
+
+          <div class="actions-group">
+            <button id="startTaskBtn" class="btn btn-primary" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              一括取得を開始
+            </button>
+            <button id="pauseTaskBtn" class="btn btn-secondary" type="button" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              一時停止
+            </button>
+            <button id="stopExportBtn" class="btn btn-amber" type="button" disabled title="鍵垢化や中断時、現在までに取得できたデータのみを即座に出力します">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+              中断して出力
+            </button>
+            <button id="cancelTaskBtn" class="btn btn-danger" type="button" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              中止
+            </button>
+          </div>
+        </div>
+
+        <!-- Multi-Account & Concurrency Control Strip -->
+        <div class="target-sub-row" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle); margin-top: 0.75rem; font-size: 12px; color: var(--text-secondary);">
+          <div style="display: flex; align-items: center; gap: 0.6rem; flex: 1;">
+            <span class="mono" style="font-weight: 600; color: var(--text-primary);">複数アカウント対応:</span>
+            <span>カンマ・スペース区切りで複数指定すると、同時並行で常時監視・取得を自動分散処理します。</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <label for="maxConcurrentAccountsInput" style="white-space: nowrap; font-weight: 500;">同時処理件数: <strong id="concurrentAccountsVal" class="mono" style="color: var(--accent-primary);">3</strong> 垢</label>
+            <input type="range" id="maxConcurrentAccountsInput" min="1" max="10" value="3" class="range-slider" style="width: 100px;">
+          </div>
+        </div>
+
+        <!-- Inspected Profile Ribbon -->
+        <div id="profilePreviewArea" class="profile-card hidden">
+          <img id="previewAvatarImg" class="profile-avatar" src="" alt="Avatar">
+          <div class="profile-details">
+            <div class="profile-title-line">
+              <span id="previewName" class="profile-name">ユーザー名</span>
+              <span id="previewScreenName" class="profile-handle">@handle</span>
+              <span id="previewProtectedBadge" class="badge badge-public">公開</span>
+            </div>
+            <div id="previewBio" class="profile-bio">プロフィール文</div>
+            <div class="profile-meta-line">
+              <span id="previewLocation" class="profile-meta-item hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <span class="meta-val"></span>
+              </span>
+              <span id="previewUrl" class="profile-meta-item hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                <span class="meta-val"></span>
+              </span>
+              <span class="profile-meta-item mono">
+                <span id="previewFollowers">0</span> フォロワー · <span id="previewTweetCount">0</span> ポスト
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Presets Selector Strip -->
+      <section class="presets-bar">
+        <span class="presets-label">プリセット:</span>
+        <button type="button" class="preset-chip active" data-preset="full">フルバックアップ (All-in)</button>
+        <button type="button" class="preset-chip" data-preset="media_only">メディア重点 (画像/動画)</button>
+        <button type="button" class="preset-chip" data-preset="speed_light">高速テキストのみ</button>
+        <button type="button" class="preset-chip" data-preset="archive_orig">本人投稿のみ</button>
+      </section>
+
+      <!-- 4 Configuration Columns -->
+      <section class="config-grid">
+        <!-- Col 1: Media Downloads & Quality -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">メディア設定</span>
+          </div>
+          <div class="card-body field-group">
+            <label class="check-item">
+              <input type="checkbox" id="downloadImagesToggle" class="checkbox-custom" checked>
+              <span class="check-label">画像のダウンロード</span>
+            </label>
+            <div class="form-item">
+              <label for="imageQualitySelect" class="form-label">画像画質制限</label>
+              <select id="imageQualitySelect" class="form-select">
+                <option value="orig" selected>orig (最高画質・原寸)</option>
+                <option value="large">large (高解像度)</option>
+                <option value="medium">medium (中解像度)</option>
+                <option value="small">small (低容量サムネイル)</option>
+              </select>
+            </div>
+
+            <div class="field-separator"></div>
+
+            <label class="check-item">
+              <input type="checkbox" id="downloadVideosToggle" class="checkbox-custom" checked>
+              <span class="check-label">動画のダウンロード</span>
+            </label>
+            <div class="form-item">
+              <label for="videoQualitySelect" class="form-label">動画画質制限</label>
+              <select id="videoQualitySelect" class="form-select">
+                <option value="highest" selected>最高画質 (Highest)</option>
+                <option value="1080p">1080p (FHD)</option>
+                <option value="720p">720p (HD)</option>
+                <option value="480p">480p (SD)</option>
+                <option value="lowest">低容量 (Lowest)</option>
+              </select>
+            </div>
+
+            <div class="field-separator"></div>
+
+            <div class="form-item">
+              <div class="form-label">並列ダウンロード: <span id="concurrencyVal" class="mono">8</span> 並列</div>
+              <input type="range" id="mediaConcurrencyInput" min="1" max="20" value="8" class="range-slider">
+            </div>
+          </div>
+        </div>
+
+        <!-- Col 2: Post Filters & Date Scope -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">投稿フィルタ & 期間</span>
+          </div>
+          <div class="card-body field-group">
+            <div class="check-grid-2">
+              <label class="check-item">
+                <input type="checkbox" id="filterOriginals" class="checkbox-custom" checked>
+                <span class="check-label">通常ポスト</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="filterReplies" class="checkbox-custom" checked>
+                <span class="check-label">返信 (リプ)</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="filterReposts" class="checkbox-custom" checked>
+                <span class="check-label">リポスト (RT)</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="filterQuotes" class="checkbox-custom" checked>
+                <span class="check-label">引用ポスト</span>
+              </label>
+            </div>
+
+            <div class="field-separator"></div>
+
+            <div class="form-item">
+              <label class="form-label">取得順序</label>
+              <div class="segmented-control">
+                <label class="segmented-option active" id="dirOptionNewest">
+                  <input type="radio" name="directionRadio" value="newest" checked>
+                  最新順
+                </label>
+                <label class="segmented-option" id="dirOptionOldest">
+                  <input type="radio" name="directionRadio" value="oldest">
+                  最古順
+                </label>
+              </div>
+            </div>
+
+            <div class="field-separator"></div>
+
+            <div class="form-item">
+              <label for="dateFromInput" class="form-label">開始日 (From)</label>
+              <input type="date" id="dateFromInput" class="form-input-sm">
+            </div>
+            <div class="form-item">
+              <label for="dateToInput" class="form-label">終了日 (To)</label>
+              <input type="date" id="dateToInput" class="form-input-sm">
+            </div>
+          </div>
+        </div>
+
+        <!-- Col 3: Profile Elements -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">プロフィール取得項目</span>
+          </div>
+          <div class="card-body field-group">
+            <div class="check-grid-2">
+              <label class="check-item">
+                <input type="checkbox" id="profHeader" class="checkbox-custom" checked>
+                <span class="check-label">ヘッダー画像</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profAvatar" class="checkbox-custom" checked>
+                <span class="check-label">アイコン画像</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profUserId" class="checkbox-custom" checked>
+                <span class="check-label">ユーザーID</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profBio" class="checkbox-custom" checked>
+                <span class="check-label">プロフィール文</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profBirthday" class="checkbox-custom" checked>
+                <span class="check-label">公開生年月日</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profUrl" class="checkbox-custom" checked>
+                <span class="check-label">登録URL</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profLocation" class="checkbox-custom" checked>
+                <span class="check-label">位置情報</span>
+              </label>
+              <label class="check-item">
+                <input type="checkbox" id="profPinned" class="checkbox-custom" checked>
+                <span class="check-label">固定ポスト</span>
+              </label>
+            </div>
+            <div class="field-separator"></div>
+            <p class="helper-text">取得中にプロフィールが更新された場合、変更差分を自動検知して新画像をタイムスタンプ付きで追加保存します。</p>
+          </div>
+        </div>
+
+        <!-- Col 4: Resilience & Compression -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">鍵垢復帰 & 出力形式</span>
+          </div>
+          <div class="card-body field-group">
+            <label class="check-item">
+              <input type="checkbox" id="continuousModeToggle" class="checkbox-custom">
+              <span class="check-label font-bold">常時監視モード (ずっと取得し続ける)</span>
+            </label>
+            <p class="helper-text">最新投稿まで取得後も終了せず、新着ポストやプロフィール更新を定期検知して自動追記します。</p>
+
+            <div class="field-separator"></div>
+
+            <label class="check-item">
+              <input type="checkbox" id="retryOnLockedToggle" class="checkbox-custom" checked>
+              <span class="check-label">鍵垢時に再試行を継続</span>
+            </label>
+            <p class="helper-text">ON: 公開再開まで定期ポーリング待機。<br>OFF: 鍵垢化時点で即座に保存終了。</p>
+
+            <div class="field-separator"></div>
+
+            <label class="check-item">
+              <input type="checkbox" id="startOnLockedToggle" class="checkbox-custom" checked>
+              <span class="check-label">鍵垢の状態で取得開始を許可</span>
+            </label>
+            <p class="helper-text">最初から非公開の場合も待機監視します。</p>
+
+            <div class="field-separator"></div>
+
+            <div class="form-item">
+              <label for="exportFormatSelect" class="form-label">出力形式</label>
+              <select id="exportFormatSelect" class="form-select">
+                <option value="zip" selected>ZIP アーカイブ (.zip)</option>
+                <option value="xarchpjzip">.xarchpjzip アーカイブ (.xarchpjzip)</option>
+                <option value="tar.gz">TAR.GZ アーカイブ (.tar.gz)</option>
+                <option value="tar">TAR アーカイブ (.tar)</option>
+                <option value="folder">フォルダ (非圧縮)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Telemetry Strip & Status -->
+      <section class="telemetry-strip">
+        <div id="statusBanner" class="status-callout">
+          <div class="status-title-group">
+            <span class="pulse-dot"></span>
+            <div>
+              <div id="taskStateLabel" class="status-headline">待機中 (IDLE)</div>
+              <div id="taskStatusSub" class="status-subline">対象ユーザーを入力して「一括取得を開始」を押してください</div>
+            </div>
+          </div>
+          <div id="archiveDownloadWrap" class="hidden">
+            <a id="archiveDownloadLink" href="#" class="btn btn-success btn-sm" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              <span id="archiveDownloadText">バックアップをダウンロード</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Real-Time Metrics Row -->
+        <div class="metrics-row">
+          <div class="metric-cell">
+            <span class="metric-header">取得ポスト数</span>
+            <span class="metric-number mono" id="mTweetsCount">0</span>
+            <span class="metric-footnote mono" id="mSpeedText">0 tw/s</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-header">ダウンロード済メディア</span>
+            <span class="metric-number mono" id="mMediaCount">0</span>
+            <span class="metric-footnote mono" id="mMediaBytes">0 MB</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-header">検出メディア数</span>
+            <span class="metric-number mono" id="mFoundMedia">0</span>
+            <span class="metric-footnote mono" id="mFoundMediaSub">画像 0 / 動画 0</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-header">プロフィール更新検知</span>
+            <span class="metric-number mono" id="mProfUpdates">0</span>
+            <span class="metric-footnote">履歴ファイルに保存</span>
+          </div>
+          <div class="metric-cell">
+            <span class="metric-header">鍵垢監視ステータス</span>
+            <span class="metric-number mono" id="mLockRetries">0</span>
+            <span class="metric-footnote" id="mLockStatusText">通常</span>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-container">
+          <div class="progress-header">
+            <span>メディアダウンロード進捗</span>
+            <span class="mono" id="mediaProgressPercent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="mediaProgressBar" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Multi-Account Monitor Deck -->
+        <div id="multiAccountTray" class="multi-account-tray hidden" style="margin-top: 1rem; padding: 0.85rem 1rem; background-color: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; font-size: 12px; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+              同時常時監視アカウント一覧 (<span id="multiAccountActiveCount" class="mono">0</span> 件)
+            </span>
+            <span id="multiAccountSummaryStatus" class="mono" style="font-size: 11px; color: var(--text-muted);">MONITORING ACTIVE</span>
+          </div>
+          <div id="multiAccountList" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            <!-- dynamically populated account status chips -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Workspace Dual View -->
+      <section class="card workspace-card">
+        <div class="tab-nav">
+          <button type="button" class="tab-button active" data-tab="feed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
+            リアルタイムフィード (<span id="feedCount" class="mono">0</span>)
+          </button>
+          <button type="button" class="tab-button" data-tab="logs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            実行ログ (<span id="logCount" class="mono">0</span>)
+          </button>
+          <button type="button" class="tab-button" data-tab="history">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            過去の出力バックアップ
+          </button>
+        </div>
+
+        <!-- Feed View -->
+        <div id="tabContentFeed" class="tab-view">
+          <div id="tweetsFeedGrid" class="tweets-masonry">
+            <div class="feed-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+              <span>取得が開始されると、ポストがここにストリーミング表示されます</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Logs View -->
+        <div id="tabContentLogs" class="tab-view hidden">
+          <div class="terminal-stream" id="terminalLogs">
+            <div class="log-entry log-level-info"><span class="log-timestamp">[SYSTEM]</span> Ready. FxTwitter API connection established.</div>
+          </div>
+        </div>
+
+        <!-- Past History View -->
+        <div id="tabContentHistory" class="tab-view hidden">
+          <div id="historyList" class="history-container">
+            <p class="helper-text p-4">読み込み中...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>FxTwitter Archive Studio &copy; 2026 by Hikaproj</span>
+      <span>高速データ収集 · メディア画質制御 · 鍵垢復帰 · ZIP/TAR.GZ出力</span>
+    </footer>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

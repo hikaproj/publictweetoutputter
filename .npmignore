@@ -1,0 +1,10 @@
+.git/
+.github/
+.agent/
+output/
+target/
+dist/
+tests/
+*.log
+.gitignore
+.npmignore

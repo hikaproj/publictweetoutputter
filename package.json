@@ -1,0 +1,26 @@
+{
+  "name": "public-tweet-outputter",
+  "version": "1.0.0",
+  "description": "Ultra-fast Twitter/X public post exporter using FxTwitter API with robust private-account recovery, media filters, and multi-format compression.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "cli": "node cli.js"
+  },
+  "keywords": [
+    "twitter",
+    "x",
+    "fxtwitter",
+    "scraper",
+    "exporter",
+    "downloader"
+  ],
+  "author": "Hikaproj",
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^8.0.0",
+    "express": "^5.3.0",
+    "jszip": "^3.10.2"
+  }
+}

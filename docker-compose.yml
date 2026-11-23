@@ -1,0 +1,17 @@
+# FxTwitter Archive Studio - Docker Compose Configuration
+# Created by Hikaproj
+
+version: '3.8'
+
+services:
+  fxtweet-studio:
+    build: .
+    container_name: fxtweet-archive-studio
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./output:/app/output
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
