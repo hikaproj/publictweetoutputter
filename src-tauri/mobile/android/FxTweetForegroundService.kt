@@ -1,4 +1,4 @@
-package com.hikaproj.fxtweet
+package com.hikaproj.app.mobile.pubtweetoutputter
 
 import android.app.Notification
 import android.app.NotificationChannel

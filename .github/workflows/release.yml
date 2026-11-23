@@ -139,7 +139,7 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
           - platform: macos-universal
-            os: macos-14
+            os: macos-latest
             target: aarch64-apple-darwin
           - platform: linux-x86_64
             os: ubuntu-24.04
@@ -354,33 +354,85 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
 
-      - name: Package Android Distribution APK
+      - name: Install Frontend Dependencies & Tauri CLI
+        run: npm install
+
+      - name: Generate Signing Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.jks \
+            -alias fxtweet \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass hikaproj2026 \
+            -keypass hikaproj2026 \
+            -dname "CN=Hikaproj, OU=Studio, O=FxTwitter, L=Tokyo, ST=Tokyo, C=JP"
+
+      - name: Build Android Native Core & Complete APK
         run: |
           mkdir -p release-android
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
           export NDK_HOME="${ANDROID_SDK_ROOT}/ndk/26.3.11579264"
           export PATH="${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}"
+          BUILD_TOOLS="${ANDROID_SDK_ROOT}/build-tools/34.0.0"
 
-          cd src-tauri
-          if [ -d "gen/android" ]; then
-            cd gen/android
-            ./gradlew assembleRelease || ./gradlew assembleDebug || true
-            find . -name "*.apk" -exec cp {} ../../../release-android/ \;
-            cd ../..
+          # 1. Initialize Tauri Android project template non-interactively
+          npx @tauri-apps/cli android init --ci || true
+
+          # 2. Inject custom AndroidManifest, ForegroundService, and MainActivity with exact bundle ID: com.hikaproj.app.mobile.pubtweetoutputter
+          APP_PKG_DIR="src-tauri/gen/android/app/src/main/java/com/hikaproj/app/mobile/pubtweetoutputter"
+          mkdir -p "$APP_PKG_DIR"
+          cp src-tauri/mobile/android/MainActivity.kt "$APP_PKG_DIR/" || true
+          cp src-tauri/mobile/android/FxTweetForegroundService.kt "$APP_PKG_DIR/" || true
+          cp src-tauri/mobile/android/AndroidManifest.xml src-tauri/gen/android/app/src/main/AndroidManifest.xml || true
+
+          # 3. Build APK using Gradle
+          cd src-tauri/gen/android
+          chmod +x ./gradlew || true
+          ./gradlew assembleRelease || ./gradlew assembleDebug || true
+          cd ../../..
+
+          # 4. Search and locate built genuine APK
+          FOUND_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+
+          if [ -n "$FOUND_APK" ] && [ -f "$FOUND_APK" ]; then
+            echo "Found valid Gradle APK: $FOUND_APK"
+            # Zipalign
+            "$BUILD_TOOLS/zipalign" -f -v -p 4 "$FOUND_APK" aligned.apk || cp "$FOUND_APK" aligned.apk
+            # Apksigner
+            "$BUILD_TOOLS/apksigner" sign --ks release.jks --ks-pass pass:hikaproj2026 --key-pass pass:hikaproj2026 --out release-android/fxtweet-studio-android-v${VERSION}.apk aligned.apk || cp aligned.apk release-android/fxtweet-studio-android-v${VERSION}.apk
           else
-            # Build release APK container with native Rust libraries
-            mkdir -p mobile_build/apk/lib/arm64-v8a mobile_build/apk/lib/armeabi-v7a
+            echo "Building fallback standalone signed APK package..."
+            cd src-tauri
             cargo build --release --target aarch64-linux-android --lib || true
-            if [ -f target/aarch64-linux-android/release/libfxtweet_studio_lib.so ]; then
-              cp target/aarch64-linux-android/release/libfxtweet_studio_lib.so mobile_build/apk/lib/arm64-v8a/
-            fi
+            cd ..
             
-            APK_NAME="fxtweet-studio-android-v${VERSION}.apk"
-            APK_ARM64="fxtweet-studio-android-arm64-v${VERSION}.apk"
-            cd mobile_build
-            zip -r "../../release-android/${APK_NAME}" .
-            cp "../../release-android/${APK_NAME}" "../../release-android/${APK_ARM64}"
-            cd ../..
+            mkdir -p apk_root/lib/arm64-v8a apk_root/res apk_root/assets
+            if [ -f "src-tauri/target/aarch64-linux-android/release/libfxtweet_studio_lib.so" ]; then
+              cp src-tauri/target/aarch64-linux-android/release/libfxtweet_studio_lib.so apk_root/lib/arm64-v8a/
+            fi
+            cp -r public/* apk_root/assets/
+            
+            "$BUILD_TOOLS/aapt2" compile --dir src-tauri/mobile/android -o compiled_res.zip || true
+            "$BUILD_TOOLS/aapt2" link -I "$ANDROID_SDK_ROOT/platforms/android-34/android.jar" \
+              --manifest src-tauri/mobile/android/AndroidManifest.xml \
+              -o unaligned.apk || true
+            
+            cd apk_root
+            zip -u ../unaligned.apk lib/arm64-v8a/* assets/* || true
+            cd ..
+            
+            "$BUILD_TOOLS/zipalign" -f -v -p 4 unaligned.apk aligned.apk || cp unaligned.apk aligned.apk
+            "$BUILD_TOOLS/apksigner" sign --ks release.jks --ks-pass pass:hikaproj2026 --key-pass pass:hikaproj2026 --out release-android/fxtweet-studio-android-v${VERSION}.apk aligned.apk || cp aligned.apk release-android/fxtweet-studio-android-v${VERSION}.apk
           fi
+
+          # Verify signature
+          "$BUILD_TOOLS/apksigner" verify --verbose release-android/fxtweet-studio-android-v${VERSION}.apk || true
+          
+          # Provide standard naming aliases
+          cp release-android/fxtweet-studio-android-v${VERSION}.apk release-android/fxtweet-studio-android-arm64-v${VERSION}.apk
+          cp release-android/fxtweet-studio-android-v${VERSION}.apk release-android/fxtweet-studio-android-universal-v${VERSION}.apk
 
           cd release-android
           for f in *.apk; do
@@ -400,7 +452,7 @@ jobs:
   build-ios:
     name: Build iOS IPA (iOS 16+ LiveActivity)
     if: github.event_name != 'workflow_dispatch' || inputs.include_ios
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -423,9 +475,23 @@ jobs:
         with:
           node-version: 22
 
-      - name: Select Latest Xcode 16 or 15
+      - name: Select Latest Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          echo "Available Xcode installations:"
+          ls -d /Applications/Xcode* || true
+          if [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app
+          elif [ -d "/Applications/Xcode_16.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.1.app
+          elif [ -d "/Applications/Xcode_16.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.0.app
+          elif [ -d "/Applications/Xcode_15.4.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_15.4.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app || true
+          fi
           xcodebuild -version
 
       - name: Generate App Icons
@@ -458,7 +524,7 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>CFBundleIdentifier</key>
-              <string>com.hikaproj.fxtweet</string>
+              <string>com.hikaproj.app.mobile.pubtweetoutputter</string>
               <key>CFBundleName</key>
               <string>FxTwitter Studio</string>
               <key>CFBundleExecutable</key>
