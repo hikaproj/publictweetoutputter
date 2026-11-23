@@ -8,8 +8,9 @@ use chrono::Local;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
+use futures_util::stream::{self, StreamExt};
 
-use crate::fxtwitter::FxClient;
+use crate::fxtwitter::{self, FxClient, UserProfile};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScrapeConfig {
@@ -27,7 +28,7 @@ pub struct ScrapeConfig {
     pub include_originals: bool,
     pub retry_on_locked: bool,
     pub start_on_locked: bool,
-    pub export_format: String, // "zip", "tar.gz", "tar", "folder"
+    pub export_format: String, // "zip", "xarchpjzip", "tar.gz", "tar", "folder"
     pub media_concurrency: usize,
     pub max_tweets: usize,
     pub continuous: bool,
@@ -79,6 +80,12 @@ pub struct TaskEvent {
     pub level: String,
     pub message: String,
     pub timestamp: String,
+}
+
+#[derive(Debug, Clone)]
+struct MediaItem {
+    url: String,
+    dest: PathBuf,
 }
 
 pub struct ScrapeEngine {
@@ -140,7 +147,7 @@ impl ScrapeEngine {
         fs::create_dir_all(self.output_dir.join("media")).map_err(|e| e.to_string())?;
         fs::create_dir_all(self.output_dir.join("profile_media")).map_err(|e| e.to_string())?;
 
-        self.log(&format!("Starting backup for @{}", self.config.screen_name), "INFO");
+        self.log(&format!("Starting native backup for @{} (by Hikaproj)", self.config.screen_name), "INFO");
 
         // 1. Initial Profile
         let profile = match self.client.get_profile(&self.config.screen_name).await {
@@ -160,6 +167,23 @@ impl ScrapeEngine {
             self.wait_for_unlock().await?;
         }
 
+        // Enqueue Profile Media (Avatar & Banner)
+        let mut media_queue: Vec<MediaItem> = Vec::new();
+        if let Some(avatar) = &profile.avatar_url {
+            let ext = extract_extension(avatar, "jpg");
+            media_queue.push(MediaItem {
+                url: avatar.clone(),
+                dest: self.output_dir.join("profile_media").join(format!("avatar.{}", ext)),
+            });
+        }
+        if let Some(banner) = &profile.banner_url {
+            let ext = extract_extension(banner, "jpg");
+            media_queue.push(MediaItem {
+                url: banner.clone(),
+                dest: self.output_dir.join("profile_media").join(format!("banner.{}", ext)),
+            });
+        }
+
         // 2. Fetch Timeline
         self.log("Collecting timeline posts via FxTwitter API...", "INFO");
         let mut collected_tweets: Vec<serde_json::Value> = Vec::new();
@@ -168,7 +192,7 @@ impl ScrapeEngine {
 
         loop {
             if *self.is_stopping.lock().await {
-                self.log("User requested stop.", "WARN");
+                self.log("Stop requested by user.", "WARN");
                 break;
             }
 
@@ -180,28 +204,33 @@ impl ScrapeEngine {
             let resp = match self.client.get_statuses(&self.config.screen_name, cursor.as_deref()).await {
                 Ok(r) => r,
                 Err(e) => {
-                    self.log(&format!("Statuses request error: {}", e), "WARN");
+                    self.log(&format!("Statuses request notice: {}", e), "WARN");
                     break;
                 }
             };
 
             let count = resp.results.len();
             if count == 0 {
-                self.log("No more statuses found.", "INFO");
+                self.log("All available timeline posts fetched.", "INFO");
                 break;
             }
 
             for item in resp.results {
-                if let Some(id_str) = item.get("id").and_then(|v| v.as_str()) {
-                    if seen_ids.insert(id_str.to_string()) {
+                if let Some(id_str) = item.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    .or_else(|| item.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string())) {
+                    if seen_ids.insert(id_str.clone()) {
+                        // Extract tweet media
+                        self.extract_tweet_media(&item, &id_str, &mut media_queue).await;
                         collected_tweets.push(item);
+
                         let mut m = self.metrics.lock().await;
                         m.tweets_matching += 1;
+                        m.tweets_processed += 1;
                     }
                 }
             }
 
-            self.log(&format!("Added page of tweets. Total collected: {}", collected_tweets.len()), "INFO");
+            self.log(&format!("Retrieved batch. Total collected: {} tweets", collected_tweets.len()), "INFO");
 
             if let Some(c) = resp.cursor.and_then(|c| c.bottom) {
                 if Some(&c) == cursor.as_ref() {
@@ -222,40 +251,61 @@ impl ScrapeEngine {
             collected_tweets.sort_by_key(|t| -t.get("created_timestamp").and_then(|v| v.as_i64()).unwrap_or(0));
         }
 
-        // 4. Save JSON, CSV, Summary
-        let tweets_json_path = self.output_dir.join("tweets.json");
-        let profile_json_path = self.output_dir.join("profile.json");
-        let summary_json_path = self.output_dir.join("summary.json");
-        let readme_path = self.output_dir.join("README.txt");
-
-        fs::write(&tweets_json_path, serde_json::to_string_pretty(&collected_tweets).unwrap_or_default()).ok();
-        fs::write(&profile_json_path, serde_json::to_string_pretty(&profile).unwrap_or_default()).ok();
-        {
-            let m = self.metrics.lock().await;
-            fs::write(&summary_json_path, serde_json::to_string_pretty(&*m).unwrap_or_default()).ok();
+        // 4. Download Enqueued Media Concurrently
+        if !media_queue.is_empty() && (self.config.download_images || self.config.download_videos) {
+            self.download_media_concurrently(&media_queue).await;
         }
 
-        let readme = format!(
-"=====================================================
-FxTwitter Archive Studio (by Hikaproj)
-=====================================================
-Target Handle: @{}
-Total Tweets:  {}
-Export Date:   {}
+        // 5. Continuous Monitoring Loop (if enabled)
+        if self.config.continuous {
+            self.log(&format!("Entering continuous live monitoring mode (polling every {}s)...", self.config.continuous_interval), "INFO");
+            let mut check_interval = Duration::from_secs(self.config.continuous_interval.max(5));
+            loop {
+                if *self.is_stopping.lock().await {
+                    self.log("Stopping continuous live monitoring.", "INFO");
+                    break;
+                }
 
-Files:
-- tweets.json   : Complete JSON records
-- profile.json  : Target profile metadata
-- summary.json  : Execution statistics
-- media/        : Downloaded media files
-=====================================================",
-            self.config.screen_name,
-            collected_tweets.len(),
-            Local::now().to_rfc3339()
-        );
-        fs::write(&readme_path, readme).ok();
+                sleep(check_interval).await;
+                if *self.is_stopping.lock().await { break; }
 
-        // 5. Compress Archive
+                match self.client.get_statuses(&self.config.screen_name, None).await {
+                    Ok(resp) => {
+                        let mut new_items: Vec<MediaItem> = Vec::new();
+                        let mut new_count = 0;
+                        for item in resp.results {
+                            if let Some(id_str) = item.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                                .or_else(|| item.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string())) {
+                                if seen_ids.insert(id_str.clone()) {
+                                    new_count += 1;
+                                    self.extract_tweet_media(&item, &id_str, &mut new_items).await;
+                                    collected_tweets.insert(0, item);
+                                    let mut m = self.metrics.lock().await;
+                                    m.tweets_matching += 1;
+                                    m.tweets_processed += 1;
+                                }
+                            }
+                        }
+                        if new_count > 0 {
+                            self.log(&format!("Detected {} new posts in live monitoring!", new_count), "SUCCESS");
+                            if !new_items.is_empty() {
+                                self.download_media_concurrently(&new_items).await;
+                            }
+                            // Save intermediate files
+                            self.save_metadata_files(&collected_tweets, &profile).await;
+                        }
+                    }
+                    Err(e) => {
+                        self.log(&format!("Continuous polling check error: {}", e), "WARN");
+                    }
+                }
+            }
+        }
+
+        // 6. Save JSON, CSV, Summary, README
+        self.save_metadata_files(&collected_tweets, &profile).await;
+
+        // 7. Compress Archive
         let final_path = if self.config.export_format == "tar.gz" {
             let tar_path = self.output_dir.with_extension("tar.gz");
             self.create_tar_gz(&self.output_dir, &tar_path)?;
@@ -265,27 +315,142 @@ Files:
             let zip_path = self.output_dir.with_extension(ext);
             self.create_zip(&self.output_dir, &zip_path)?;
             zip_path
+        } else if self.config.export_format == "tar" {
+            let tar_path = self.output_dir.with_extension("tar");
+            self.create_tar(&self.output_dir, &tar_path)?;
+            tar_path
         } else {
             self.output_dir.clone()
         };
 
-        self.log(&format!("Archive ready at: {:?}", final_path), "SUCCESS");
+        self.log(&format!("Archive successfully built: {:?}", final_path), "SUCCESS");
         Ok(final_path)
+    }
+
+    async fn extract_tweet_media(&self, item: &serde_json::Value, tweet_id: &str, queue: &mut Vec<MediaItem>) {
+        let media_obj = item.get("media");
+        
+        // Extract photos
+        if self.config.download_images {
+            if let Some(photos) = media_obj.and_then(|m| m.get("photos")).and_then(|p| p.as_array()) {
+                for (idx, photo) in photos.iter().enumerate() {
+                    if let Some(raw_url) = photo.get("url").and_then(|u| u.as_str()) {
+                        let adjusted_url = select_image_url(raw_url, &self.config.image_quality);
+                        let ext = extract_extension(&adjusted_url, "jpg");
+                        let dest = self.output_dir.join("media").join(format!("{}_photo_{}.{}", tweet_id, idx + 1, ext));
+                        queue.push(MediaItem { url: adjusted_url, dest });
+                        let mut m = self.metrics.lock().await;
+                        m.images_found += 1;
+                    }
+                }
+            }
+        }
+
+        // Extract videos
+        if self.config.download_videos {
+            if let Some(videos) = media_obj.and_then(|m| m.get("videos")).and_then(|v| v.as_array()) {
+                for (idx, video) in videos.iter().enumerate() {
+                    let chosen_url = select_video_url(video, &self.config.video_quality);
+                    if let Some(url) = chosen_url {
+                        let dest = self.output_dir.join("media").join(format!("{}_video_{}.mp4", tweet_id, idx + 1));
+                        queue.push(MediaItem { url, dest });
+                        let mut m = self.metrics.lock().await;
+                        m.videos_found += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn download_media_concurrently(&self, items: &[MediaItem]) {
+        let total = items.len();
+        self.log(&format!("Downloading {} media items with concurrency {}...", total, self.config.media_concurrency), "INFO");
+
+        let concurrency = self.config.media_concurrency.clamp(1, 32);
+        let client = Arc::clone(&self.client);
+        let metrics = Arc::clone(&self.metrics);
+
+        let stream = stream::iter(items.iter().cloned().map(move |item| {
+            let client = Arc::clone(&client);
+            let metrics = Arc::clone(&metrics);
+            async move {
+                match client.download_to_file(&item.url, &item.dest).await {
+                    Ok(bytes) => {
+                        let mut m = metrics.lock().await;
+                        m.media_downloaded += 1;
+                        m.total_bytes += bytes;
+                    }
+                    Err(_) => {
+                        let mut m = metrics.lock().await;
+                        m.media_failed += 1;
+                    }
+                }
+            }
+        })).buffer_unordered(concurrency);
+
+        stream.collect::<Vec<()>>().await;
+
+        let m = self.metrics.lock().await;
+        self.log(&format!("Media download finished: {} succeeded, {} failed (Total: {} bytes)", m.media_downloaded, m.media_failed, m.total_bytes), "SUCCESS");
+    }
+
+    async fn save_metadata_files(&self, tweets: &[serde_json::Value], profile: &UserProfile) {
+        let tweets_json_path = self.output_dir.join("tweets.json");
+        let profile_json_path = self.output_dir.join("profile.json");
+        let summary_json_path = self.output_dir.join("summary.json");
+        let readme_path = self.output_dir.join("README.txt");
+
+        fs::write(&tweets_json_path, serde_json::to_string_pretty(tweets).unwrap_or_default()).ok();
+        fs::write(&profile_json_path, serde_json::to_string_pretty(profile).unwrap_or_default()).ok();
+
+        let m = self.metrics.lock().await;
+        fs::write(&summary_json_path, serde_json::to_string_pretty(&*m).unwrap_or_default()).ok();
+
+        let readme = format!(
+"=====================================================
+FxTwitter Archive Studio (by Hikaproj)
+=====================================================
+Target Handle: @{}
+Total Tweets:  {}
+Media Files:   {} (downloaded)
+Total Bytes:   {} bytes
+Export Date:   {}
+
+Files Included:
+- tweets.json   : Complete structured JSON of collected posts
+- profile.json  : Detailed target profile metadata
+- summary.json  : Performance metrics & execution stats
+- media/        : Downloaded photos, gifs, and mp4 videos
+- profile_media/: Profile avatar and header images
+
+Powered by FixTweet / FxTwitter API & Hikaproj
+=====================================================",
+            self.config.screen_name,
+            tweets.len(),
+            m.media_downloaded,
+            m.total_bytes,
+            Local::now().to_rfc3339()
+        );
+        fs::write(&readme_path, readme).ok();
     }
 
     async fn wait_for_unlock(&self) -> Result<(), String> {
         let mut retries = 0;
         loop {
             if *self.is_stopping.lock().await {
-                return Err("Stopped while waiting for unlock".to_string());
+                return Err("Stopped while waiting for account unlock".to_string());
             }
             sleep(Duration::from_secs(5)).await;
             retries += 1;
-            self.log(&format!("Checking if account is unlocked (attempt #{})", retries), "INFO");
+            {
+                let mut m = self.metrics.lock().await;
+                m.lock_retries = retries;
+            }
+            self.log(&format!("Polling locked account @{} (check #{})", self.config.screen_name, retries), "INFO");
 
             if let Ok(p) = self.client.get_profile(&self.config.screen_name).await {
                 if !p.r#protected {
-                    self.log("Account is now PUBLIC! Continuing extraction...", "SUCCESS");
+                    self.log("Account is now PUBLIC! Resuming extraction...", "SUCCESS");
                     return Ok(());
                 }
             }
@@ -322,6 +487,62 @@ Files:
         tar.finish().map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    fn create_tar(&self, src: &Path, dst: &Path) -> Result<(), String> {
+        let file = File::create(dst).map_err(|e| e.to_string())?;
+        let mut tar = tar::Builder::new(file);
+        tar.append_dir_all(".", src).map_err(|e| e.to_string())?;
+        tar.finish().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+fn select_image_url(raw_url: &str, quality: &str) -> String {
+    if raw_url.contains("twimg.com") {
+        if let Some(pos) = raw_url.find('?') {
+            let base = &raw_url[..pos];
+            return format!("{}?name={}", base, quality);
+        } else {
+            return format!("{}?name={}", raw_url, quality);
+        }
+    }
+    raw_url.to_string()
+}
+
+fn select_video_url(video: &serde_json::Value, quality: &str) -> Option<String> {
+    if let Some(formats) = video.get("formats").and_then(|f| f.as_array()) {
+        let mut mp4s: Vec<&serde_json::Value> = formats.iter()
+            .filter(|f| f.get("container").and_then(|c| c.as_str()).map_or(false, |c| c == "mp4") ||
+                        f.get("url").and_then(|u| u.as_str()).map_or(false, |u| u.contains(".mp4")))
+            .collect();
+
+        if !mp4s.is_empty() {
+            mp4s.sort_by_key(|f| f.get("bitrate").and_then(|b| b.as_i64()).unwrap_or(0));
+            if quality == "lowest" {
+                return mp4s[0].get("url").and_then(|u| u.as_str()).map(|s| s.to_string());
+            } else {
+                return mp4s.last().and_then(|f| f.get("url").and_then(|u| u.as_str())).map(|s| s.to_string());
+            }
+        }
+    }
+
+    if let Some(direct_url) = video.get("url").and_then(|u| u.as_str()) {
+        if !direct_url.contains(".m3u8") {
+            return Some(direct_url.to_string());
+        }
+    }
+    None
+}
+
+fn extract_extension(url: &str, fallback: &str) -> String {
+    let clean = if let Some(pos) = url.find('?') { &url[..pos] } else { url };
+    if let Some(dot_pos) = clean.rfind('.') {
+        let ext = &clean[dot_pos + 1..];
+        if ext.len() <= 4 && ext.chars().all(|c| c.is_alphanumeric()) {
+            return ext.to_lowercase();
+        }
+    }
+    fallback.to_string()
 }
 
 fn walkdir(dir: &Path) -> Result<Vec<PathBuf>, String> {

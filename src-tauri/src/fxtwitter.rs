@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use std::fs;
+use std::path::Path;
 
 pub const BASE_URL: &str = "https://api.fxtwitter.com";
 pub const USER_AGENT: &str = "FxTwitterArchiveStudio/1.0 (Rust; by Hikaproj)";
@@ -159,5 +161,16 @@ impl FxClient {
             .map_err(|e| format!("JSON decode error: {}", e))?;
 
         Ok(resp)
+    }
+
+    pub async fn download_to_file(&self, url: &str, dest: &Path) -> Result<u64, String> {
+        let res = self.client.get(url).send().await.map_err(|e| format!("Network error: {}", e))?;
+        if !res.status().is_success() {
+            return Err(format!("HTTP error {}", res.status()));
+        }
+        let bytes = res.bytes().await.map_err(|e| format!("Body read error: {}", e))?;
+        let len = bytes.len() as u64;
+        fs::write(dest, bytes).map_err(|e| format!("File write error: {}", e))?;
+        Ok(len)
     }
 }

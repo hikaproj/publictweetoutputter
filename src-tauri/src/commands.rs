@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::State;
 use serde::{Deserialize, Serialize};
 
@@ -27,13 +28,38 @@ pub(crate) async fn inspect_profile(handle: String) -> Result<UserProfile, Strin
 
 #[tauri::command]
 pub(crate) async fn start_backup(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     config: ScrapeConfig,
 ) -> Result<String, String> {
     let base_out = PathBuf::from("output");
-    let eng = engine::ScrapeEngine::new(config, &base_out, None);
-    let final_path = eng.run().await?;
+    let eng = Arc::new(engine::ScrapeEngine::new(config, &base_out, None));
+    {
+        let mut lock = state.engine.lock().await;
+        *lock = Some(Arc::clone(&eng));
+    }
+    let res = eng.run().await;
+    {
+        let mut lock = state.engine.lock().await;
+        *lock = None;
+    }
+    let final_path = res?;
     Ok(final_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn stop_backup(
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let eng_opt = {
+        let lock = state.engine.lock().await;
+        lock.clone()
+    };
+    if let Some(eng) = eng_opt {
+        eng.stop().await;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 #[tauri::command]

@@ -461,6 +461,64 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  if (pauseTaskBtn) {
+    pauseTaskBtn.addEventListener('click', async () => {
+      if (isTauri) {
+        appendTerminalLog('Pause is handled automatically in native batching.', 'INFO');
+        return;
+      }
+      try {
+        await fetch('/api/task/pause', { method: 'POST' });
+        appendTerminalLog('Task paused.', 'WARN');
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  }
+
+  if (stopExportBtn) {
+    stopExportBtn.addEventListener('click', async () => {
+      appendTerminalLog('Stop and export requested...', 'WARN');
+      if (isTauri) {
+        try {
+          await window.__TAURI__.core.invoke('stop_backup');
+          appendTerminalLog('Stop signal sent to native engine.', 'INFO');
+        } catch (e) {
+          console.error(e);
+        }
+        return;
+      }
+      try {
+        await fetch('/api/task/stop-export', { method: 'POST' });
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  }
+
+  if (cancelTaskBtn) {
+    cancelTaskBtn.addEventListener('click', async () => {
+      if (!confirm('本当に取得タスクを中止しますか？')) return;
+      appendTerminalLog('Task cancellation requested.', 'WARN');
+      if (isTauri) {
+        try {
+          await window.__TAURI__.core.invoke('stop_backup');
+          setRunningUI(false);
+          appendTerminalLog('Native task cancelled.', 'WARN');
+        } catch (e) {
+          console.error(e);
+        }
+        return;
+      }
+      try {
+        await fetch('/api/task/cancel', { method: 'POST' });
+        setRunningUI(false);
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  }
+
   if (openInViewerAfterExportBtn) {
     openInViewerAfterExportBtn.addEventListener('click', () => {
       switchAppMode('viewer');

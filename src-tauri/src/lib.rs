@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use std::sync::Arc;
 
 pub struct AppState {
-    pub engine: Arc<Mutex<Option<engine::ScrapeEngine>>>,
+    pub engine: Arc<Mutex<Option<Arc<engine::ScrapeEngine>>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,6 +19,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::inspect_profile,
             commands::start_backup,
+            commands::stop_backup,
             commands::open_archive_native
         ])
         .run(tauri::generate_context!())

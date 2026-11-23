@@ -87,7 +87,7 @@ jobs:
           mkdir -p dist/${DIST_NAME}
           
           # Copy essential runtime files (excluding tests, output, git, caches)
-          cp -r lib public server.js cli.js package.json package-lock.json README.md Dockerfile docker-compose.yml install.sh install.ps1 dist/${DIST_NAME}/
+          cp -r lib public server.js cli.js package.json package-lock.json README.md DOCS.md CLI.md Dockerfile docker-compose.yml install.sh install.ps1 dist/${DIST_NAME}/
           
           # Include node_modules for true out-of-the-box offline execution
           cp -r node_modules dist/${DIST_NAME}/
@@ -102,7 +102,7 @@ jobs:
           # Create dedicated Docker Distribution Package (clean, self-contained for docker compose up)
           DOCKER_NAME="fxtweet-studio-docker-v${{ steps.get_version.outputs.VERSION }}"
           mkdir -p dist/${DOCKER_NAME}
-          cp -r lib public server.js cli.js package.json package-lock.json Dockerfile docker-compose.yml .dockerignore README.md dist/${DOCKER_NAME}/
+          cp -r lib public server.js cli.js package.json package-lock.json Dockerfile docker-compose.yml .dockerignore README.md DOCS.md CLI.md dist/${DOCKER_NAME}/
           cd dist
           zip -r "${DOCKER_NAME}.zip" "${DOCKER_NAME}"
           sha256sum "${DOCKER_NAME}.zip" > "${DOCKER_NAME}.zip.sha256"
@@ -230,6 +230,7 @@ jobs:
           if (Test-Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe) {
             Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe -Destination release-bin/ -Force
           }
+          Copy-Item -Path README.md, DOCS.md, CLI.md -Destination release-bin/ -Force
           $MainZip = "fxtweet-studio-windows-x86_64-v${env:VERSION}.zip"
           Compress-Archive -Path release-bin/* -DestinationPath $MainZip -Force
           Copy-Item -Path $MainZip -Destination "fxtweet-studio-windows-cli.zip" -Force
@@ -237,8 +238,9 @@ jobs:
       - name: Package Desktop Artifacts (macOS)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
         run: |
+          cp README.md DOCS.md CLI.md release-bin/
           MAIN_TAR="fxtweet-studio-macos-universal-v${VERSION}.tar.gz"
-          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio
+          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio README.md DOCS.md CLI.md
           cp "$MAIN_TAR" fxtweet-studio-macos-cli.tar.gz
 
       - name: Package Desktop Artifacts (Linux / Debian / Arch)
@@ -249,28 +251,29 @@ jobs:
           if [ -f src-tauri/target/${{ matrix.target }}/release/fxtweet-studio ]; then
             cp src-tauri/target/${{ matrix.target }}/release/fxtweet-studio release-bin/
           fi
+          cp README.md DOCS.md CLI.md release-bin/
           MAIN_TAR="fxtweet-studio-linux-x86_64-v${VERSION}.tar.gz"
-          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio
+          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio README.md DOCS.md CLI.md
           cp "$MAIN_TAR" fxtweet-studio-linux-cli.tar.gz
           
           # Arch Linux PKGBUILD generation (self-contained package)
-          cat << EOF > release-bin/PKGBUILD
-# Maintainer: Hikaproj
-pkgname=fxtweet-studio-bin
-pkgver=${VERSION}
-pkgrel=1
-pkgdesc="Ultra-fast Twitter/X bulk post and media archive studio by Hikaproj"
-arch=('x86_64')
-url="https://github.com/Hikaproj/publictweetoutputter"
-license=('MIT')
-depends=('webkit2gtk-4.1' 'gtk3' 'openssl')
-source=("fxtweet-cli" "fxtweet-studio")
-sha256sums=('SKIP' 'SKIP')
-package() {
-    install -Dm755 "\${srcdir}/fxtweet-cli" "\${pkgdir}/usr/bin/fxtweet-cli"
-    install -Dm755 "\${srcdir}/fxtweet-studio" "\${pkgdir}/usr/bin/fxtweet-studio"
-}
-EOF
+          {
+            echo "# Maintainer: Hikaproj"
+            echo "pkgname=fxtweet-studio-bin"
+            echo "pkgver=${VERSION}"
+            echo "pkgrel=1"
+            echo 'pkgdesc="Ultra-fast Twitter/X bulk post and media archive studio by Hikaproj"'
+            echo "arch=('x86_64')"
+            echo 'url="https://github.com/Hikaproj/publictweetoutputter"'
+            echo "license=('MIT')"
+            echo "depends=('webkit2gtk-4.1' 'gtk3' 'openssl')"
+            echo "source=('fxtweet-cli' 'fxtweet-studio')"
+            echo "sha256sums=('SKIP' 'SKIP')"
+            echo 'package() {'
+            echo '    install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-cli"'
+            echo '    install -Dm755 "${srcdir}/fxtweet-studio" "${pkgdir}/usr/bin/fxtweet-studio"'
+            echo '}'
+          } > release-bin/PKGBUILD
           tar -czf "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" -C release-bin PKGBUILD fxtweet-cli fxtweet-studio
           cp "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" fxtweet-studio-arch-package.tar.gz
 
