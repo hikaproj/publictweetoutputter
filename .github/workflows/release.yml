@@ -49,6 +49,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
+
 jobs:
   # --------------------------------------------------------------------------
   # 1. Package Node.js Standalone Distribution
@@ -152,6 +155,10 @@ jobs:
         with:
           node-version: 22
 
+      - name: Generate Desktop App Icons
+        if: steps.check_enabled.outputs.ENABLED == 'true'
+        run: node scripts/generate-icons.js
+
       - name: Install Rust stable (Windows & Linux)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os != 'macOS'
         uses: dtolnay/rust-toolchain@stable
@@ -169,44 +176,53 @@ jobs:
         run: |
           sudo add-apt-repository -y universe || true
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev build-essential libayatana-appindicator3-dev || \
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev build-essential libappindicator3-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev build-essential libxdo-dev libayatana-appindicator3-dev || \
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev build-essential libxdo-dev libappindicator3-dev
 
-      - name: Build Standalone CLI (Windows & Linux)
+      - name: Build Standalone Binaries (Windows & Linux)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os != 'macOS'
         working-directory: src-tauri
         run: |
-          cargo build --release --target ${{ matrix.target }} --bin fxtweet-cli
+          cargo build --release --target ${{ matrix.target }} --bin fxtweet-cli --bin fxtweet-studio
 
-      - name: Build Universal CLI (macOS lipo)
+      - name: Build Universal Binaries (macOS lipo)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
         working-directory: src-tauri
         run: |
-          cargo build --release --target x86_64-apple-darwin --bin fxtweet-cli
-          cargo build --release --target aarch64-apple-darwin --bin fxtweet-cli
+          cargo build --release --target x86_64-apple-darwin --bin fxtweet-cli --bin fxtweet-studio
+          cargo build --release --target aarch64-apple-darwin --bin fxtweet-cli --bin fxtweet-studio
           mkdir -p ../release-bin
           lipo -create -output ../release-bin/fxtweet-cli \
             target/x86_64-apple-darwin/release/fxtweet-cli \
             target/aarch64-apple-darwin/release/fxtweet-cli
+          lipo -create -output ../release-bin/fxtweet-studio \
+            target/x86_64-apple-darwin/release/fxtweet-studio \
+            target/aarch64-apple-darwin/release/fxtweet-studio
 
       - name: Package Desktop Artifacts (Windows)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Windows'
         run: |
-          mkdir release-bin
-          cp src-tauri/target/${{ matrix.target }}/release/fxtweet-cli.exe release-bin/
-          Compress-Archive -Path release-bin/* -DestinationPath fxtweet-studio-windows-cli.zip
+          if (-not (Test-Path release-bin)) { New-Item -ItemType Directory -Path release-bin -Force }
+          Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-cli.exe -Destination release-bin/ -Force
+          if (Test-Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe) {
+            Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe -Destination release-bin/ -Force
+          }
+          Compress-Archive -Path release-bin/* -DestinationPath fxtweet-studio-windows-cli.zip -Force
 
       - name: Package Desktop Artifacts (macOS)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
         run: |
-          tar -czf fxtweet-studio-macos-cli.tar.gz -C release-bin fxtweet-cli
+          tar -czf fxtweet-studio-macos-cli.tar.gz -C release-bin fxtweet-cli fxtweet-studio
 
       - name: Package Desktop Artifacts (Linux / Debian / Arch)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Linux'
         run: |
           mkdir -p release-bin
           cp src-tauri/target/${{ matrix.target }}/release/fxtweet-cli release-bin/
-          tar -czf fxtweet-studio-linux-cli.tar.gz -C release-bin fxtweet-cli
+          if [ -f src-tauri/target/${{ matrix.target }}/release/fxtweet-studio ]; then
+            cp src-tauri/target/${{ matrix.target }}/release/fxtweet-studio release-bin/
+          fi
+          tar -czf fxtweet-studio-linux-cli.tar.gz -C release-bin fxtweet-cli fxtweet-studio
           
           # Arch Linux PKGBUILD generation (self-contained package)
           cat << 'EOF' > release-bin/PKGBUILD
@@ -219,13 +235,14 @@ jobs:
           url="https://github.com/Hikaproj/publictweetoutputter"
           license=('MIT')
           depends=('webkit2gtk-4.1' 'gtk3' 'openssl')
-          source=("fxtweet-cli")
-          sha256sums=('SKIP')
+          source=("fxtweet-cli" "fxtweet-studio")
+          sha256sums=('SKIP' 'SKIP')
           package() {
-              install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-studio"
+              install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-cli"
+              install -Dm755 "${srcdir}/fxtweet-studio" "${pkgdir}/usr/bin/fxtweet-studio"
           }
           EOF
-          tar -czf fxtweet-studio-arch-package.tar.gz -C release-bin PKGBUILD fxtweet-cli
+          tar -czf fxtweet-studio-arch-package.tar.gz -C release-bin PKGBUILD fxtweet-cli fxtweet-studio
 
       - name: Upload Platform Artifacts
         if: steps.check_enabled.outputs.ENABLED == 'true'
@@ -298,41 +315,13 @@ jobs:
             
             # Windows PowerShell (x86_64 / arm64)
             irm https://raw.githubusercontent.com/Hikaproj/publictweetoutputter/main/install.ps1 | iex
-            
-            # Docker / Docker Compose
-            docker compose up -d
             ```
-            
-            ### Included Packages & Platforms:
-            - **Universal CLI Installers**:
-              - `install.sh` (Linux + macOS universal installer & portal runner)
-              - `install.ps1` (Windows PowerShell auto-installer)
-            - **Node.js Edition** (Portable, zero-install Web & CLI suite):
-              - `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.zip`
-              - `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.tar.gz`
-            - **Windows Desktop & CLI** (Windows 10/11 x86_64):
-              - `fxtweet-studio-windows-cli.zip`
-            - **macOS Desktop & CLI** (macOS Universal Binary for Intel & Apple Silicon):
-              - `fxtweet-studio-macos-cli.tar.gz`
-            - **Linux / Debian / Ubuntu** (Debian, Ubuntu 20.04/22.04/24.04):
-              - `fxtweet-studio-linux-cli.tar.gz`
-            - **Arch Linux** (Standalone binary + PKGBUILD):
-              - `fxtweet-studio-arch-package.tar.gz`
-            - **Container Support**:
-              - `Dockerfile` & `docker-compose.yml`
-            
-            ### Key Features:
-            - **Ultra-Fast Ingestion**: High-speed public tweet and media exporter powered by FixTweet / FxTwitter v2 API.
-            - **Multi-Account Concurrent Monitoring**: Monitor and archive multiple Twitter/X accounts concurrently (`@user1, @user2, ...`) with configurable concurrency (1-10 accounts).
-            - **Continuous Monitoring Mode ("常時監視モード")**: Keep running indefinitely, polling and auto-appending new posts and profile updates in real-time.
-            - **Locked Account Resilience**: Automatic polling and recovery when accounts turn private and public again, with zero data loss.
-            - **Comprehensive Formats**: `.zip`, `.tar.gz`, `.tar`, folder, and native `.xarchpjzip` format.
-            - **Authentic X-Like Offline Viewer**:
-              - Light (default), Dim, and Dark modes.
-              - Direct `.zip` and `.xarchpjzip` archive decompression & browsing.
-              - One-click high-resolution Tweet Card Image Export (PNG).
-            - **Clean Precision Design**: Zero emojis, pure SVG vector line icons, high contrast.
-          files: |
-            release-assets/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            ### Features:
+            - Ultra-fast asynchronous Twitter/X timeline and media backup using FxTwitter v2 API
+            - Complete multi-account concurrent monitoring & continuous polling mode
+            - Full locked account recovery with persistent polling & auto-resume
+            - Full compression suite: `.zip`, `.tar.gz`, `.tar`, and `.xarchpjzip` format
+            - Offline X-like interactive viewer with tweet screenshot export
+            - Cross-platform native Rust desktop app & CLI binaries (Windows, macOS Universal, Linux x86_64 & Arch)
+          files: release-assets/*

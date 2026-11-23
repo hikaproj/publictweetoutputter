@@ -297,7 +297,8 @@ Files:
         for entry in walkdir(src)? {
             let relative = entry.strip_prefix(src).map_err(|e| e.to_string())?;
             if entry.is_file() {
-                zip.start_file(relative.to_string_lossy(), options).map_err(|e| e.to_string())?;
+                let entry_name = relative.to_string_lossy().replace('\\', "/");
+                zip.start_file(entry_name, options).map_err(|e| e.to_string())?;
                 let mut f = File::open(&entry).map_err(|e| e.to_string())?;
                 let mut buf = Vec::new();
                 f.read_to_end(&mut buf).map_err(|e| e.to_string())?;
