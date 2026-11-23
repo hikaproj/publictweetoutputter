@@ -139,7 +139,7 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
           - platform: macos-universal
-            os: macos-latest
+            os: macos-15
             target: aarch64-apple-darwin
           - platform: linux-x86_64
             os: ubuntu-24.04
@@ -460,7 +460,8 @@ jobs:
   build-ios:
     name: Build iOS IPA (iOS 16+ LiveActivity)
     if: github.event_name != 'workflow_dispatch' || inputs.include_ios
-    runs-on: macos-latest
+    needs: [build-desktop]
+    runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -578,7 +579,7 @@ jobs:
   publish-release:
     name: Publish GitHub Release (by Hikaproj)
     needs: [package-nodejs, build-desktop, build-android, build-ios]
-    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
+    if: always() && !cancelled() && needs.build-android.result != 'failure' && needs.package-nodejs.result != 'failure'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
