@@ -24,8 +24,8 @@ flowchart TD
         CLIArgs --> REngine
     end
 
-    subgraph NativeViewer["Integrated Viewer & Archive Reader"]
-        VUI["X-Style Interactive Viewer"]
+    subgraph NativeViewer["Dedicated Viewer (fxtweet-viewer / viewer.html)"]
+        VUI["X-Style Interactive Viewer (Authentic Repost & Quote Layout)"]
         ZipNative["Rust zip::ZipArchive (Native Parser)"]
         JSZip["In-Browser JSZip (Web Fallback)"]
         VUI --> ZipNative
@@ -104,6 +104,13 @@ pub(crate) async fn stop_backup(
 pub(crate) async fn open_archive_native(file_path: String) -> Result<ArchivePayload, String>
 ```
 - **説明**: 指定された `.zip` または `.xarchpjzip` ファイルを Rust の `zip::ZipArchive` でネイティブ解凍し、`tweets.json`、`profile.json`、`summary.json`、およびメディア一覧をメモリ上で抽出してビューアーへ直接渡却します。
+
+### 3.5 `open_viewer_window`
+```rust
+#[tauri::command]
+pub(crate) async fn open_viewer_window(app: tauri::AppHandle) -> Result<(), String>
+```
+- **説明**: 専用の独立ウィンドウ「FxTwitter Archive Viewer - by Hikaproj」をネイティブに生成またはフォーカスし、X 完全準拠のオフライン閲覧インターフェースを表示します。
 
 ---
 

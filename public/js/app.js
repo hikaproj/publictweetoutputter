@@ -14,29 +14,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
-  // Mode Switcher: Downloader ⇄ Integrated Viewer
+  // Launch Standalone Dedicated Viewer Window
   // ==========================================================================
-  const appModeArchiveBtn = document.getElementById('appModeArchiveBtn');
-  const appModeViewerBtn = document.getElementById('appModeViewerBtn');
-  const viewArchiveSection = document.getElementById('viewArchiveSection');
-  const viewViewerSection = document.getElementById('viewViewerSection');
-
-  function switchAppMode(mode) {
-    if (mode === 'viewer') {
-      if (appModeArchiveBtn) appModeArchiveBtn.classList.remove('active');
-      if (appModeViewerBtn) appModeViewerBtn.classList.add('active');
-      if (viewArchiveSection) viewArchiveSection.classList.add('hidden');
-      if (viewViewerSection) viewViewerSection.classList.remove('hidden');
-    } else {
-      if (appModeViewerBtn) appModeViewerBtn.classList.remove('active');
-      if (appModeArchiveBtn) appModeArchiveBtn.classList.add('active');
-      if (viewViewerSection) viewViewerSection.classList.add('hidden');
-      if (viewArchiveSection) viewArchiveSection.classList.remove('hidden');
-    }
+  const openViewerWindowBtn = document.getElementById('openViewerWindowBtn');
+  if (openViewerWindowBtn) {
+    openViewerWindowBtn.addEventListener('click', async () => {
+      if (isTauri) {
+        try {
+          await window.__TAURI__.core.invoke('open_viewer_window');
+        } catch (e) {
+          console.error('Failed to open native viewer window:', e);
+          window.open('viewer.html', '_blank');
+        }
+      } else {
+        window.open('viewer.html', '_blank');
+      }
+    });
   }
-
-  if (appModeArchiveBtn) appModeArchiveBtn.addEventListener('click', () => switchAppMode('archive'));
-  if (appModeViewerBtn) appModeViewerBtn.addEventListener('click', () => switchAppMode('viewer'));
 
   // Theme Switching (Default: Light Mode)
   const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -429,10 +423,17 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveDownloadWrap.classList.remove('hidden');
         archiveDownloadText.textContent = `出力完了: ${finalPath}`;
         archiveDownloadLink.href = '#';
-        archiveDownloadLink.onclick = (e) => {
+        archiveDownloadLink.onclick = async (e) => {
           e.preventDefault();
-          switchAppMode('viewer');
-          loadArchiveNative(finalPath);
+          if (isTauri) {
+            try {
+              await window.__TAURI__.core.invoke('open_viewer_window');
+            } catch (err) {
+              window.open('viewer.html', '_blank');
+            }
+          } else {
+            window.open('viewer.html', '_blank');
+          }
         };
         appendTerminalLog(`Backup completed successfully at: ${finalPath}`, 'SUCCESS');
       } catch (err) {
@@ -520,10 +521,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (openInViewerAfterExportBtn) {
-    openInViewerAfterExportBtn.addEventListener('click', () => {
-      switchAppMode('viewer');
-      if (lastGeneratedArchive) {
-        loadArchiveNative(lastGeneratedArchive);
+    openInViewerAfterExportBtn.addEventListener('click', async () => {
+      if (isTauri) {
+        try {
+          await window.__TAURI__.core.invoke('open_viewer_window');
+        } catch (err) {
+          window.open('viewer.html', '_blank');
+        }
+      } else {
+        window.open('viewer.html', '_blank');
       }
     });
   }
@@ -540,368 +546,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (logCount) logCount.textContent = logCounter;
   }
 
-  // ==========================================================================
-  // INTEGRATED X (TWITTER) VIEWER LOGIC
-  // ==========================================================================
-  let vTweets = [];
-  let vProfile = null;
-  let vFilter = 'all';
-  const vMediaBlobMap = new Map();
-
-  const viewerFilePicker = document.getElementById('viewerFilePicker');
-  const viewerDropZone = document.getElementById('viewerDropZone');
-  const viewerSearchInput = document.getElementById('viewerSearchInput');
-  const viewerContentWrapper = document.getElementById('viewerContentWrapper');
-  const viewerTweetsList = document.getElementById('viewerTweetsList');
-  const viewerLoadedFilename = document.getElementById('viewerLoadedFilename');
-
-  // File picker handler
-  if (viewerFilePicker) {
-    viewerFilePicker.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleIncomingArchive(file);
-    });
-  }
-
-  // Drop zone handler
-  if (viewerDropZone) {
-    ['dragenter', 'dragover'].forEach(ev => {
-      viewerDropZone.addEventListener(ev, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        viewerDropZone.classList.add('drag-over');
-      });
-    });
-
-    ['dragleave', 'drop'].forEach(ev => {
-      viewerDropZone.addEventListener(ev, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        viewerDropZone.classList.remove('drag-over');
-      });
-    });
-
-    viewerDropZone.addEventListener('drop', (e) => {
-      const files = e.dataTransfer?.files;
-      if (files && files.length > 0) {
-        handleIncomingArchive(files[0]);
-      }
-    });
-  }
-
-  // Search input filter
-  if (viewerSearchInput) {
-    viewerSearchInput.addEventListener('input', renderViewerTweets);
-  }
-
-  // Filter tabs
-  document.querySelectorAll('.v-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.v-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      vFilter = tab.getAttribute('data-vfilter') || 'all';
-      renderViewerTweets();
-    });
-  });
-
-  async function handleIncomingArchive(file) {
-    const nameLower = file.name.toLowerCase();
-    if (viewerLoadedFilename) viewerLoadedFilename.textContent = `読み込み中: ${file.name}...`;
-
-    if (nameLower.endsWith('.xarchpjzip') || nameLower.endsWith('.zip')) {
-      await loadArchiveZip(file);
-    } else if (nameLower.endsWith('.json')) {
-      const text = await file.text();
-      try {
-        const json = JSON.parse(text);
-        if (Array.isArray(json)) {
-          vTweets = json;
-        } else if (json.tweets) {
-          vTweets = json.tweets;
-          vProfile = json.profile || null;
-        }
-        renderViewerAll(file.name);
-      } catch (err) {
-        alert('JSON パースエラー: ' + err.message);
-      }
-    } else {
-      alert('対応していない形式です。.xarchpjzip, .zip, または .json を指定してください。');
-    }
-  }
-
-  // Rust Native Archive Loader
-  async function loadArchiveNative(filePath) {
-    if (!isTauri) return;
-    try {
-      if (viewerLoadedFilename) viewerLoadedFilename.textContent = `ネイティブ解凍中: ${filePath}...`;
-      const res = await window.__TAURI__.core.invoke('open_archive_native', { filePath });
-      if (res && res.success) {
-        vTweets = res.tweets || [];
-        vProfile = res.profile || null;
-        renderViewerAll(res.filename);
-      }
-    } catch (err) {
-      console.error('Native archive load error:', err);
-      alert(`ネイティブ解凍エラー: ${err}`);
-    }
-  }
-
-  // JSZip Archive Loader for Web / Fallback
-  async function loadArchiveZip(file) {
-    try {
-      if (typeof JSZip === 'undefined') {
-        throw new Error('JSZip ライブラリが読み込まれていません');
-      }
-
-      const zip = await JSZip.loadAsync(file);
-      vMediaBlobMap.clear();
-
-      let tweetsEntry = null;
-      let profileEntry = null;
-      const mediaTasks = [];
-
-      zip.forEach((relPath, entry) => {
-        const lower = relPath.toLowerCase();
-        if (lower.endsWith('tweets.json') || lower === 'tweets.json') {
-          tweetsEntry = entry;
-        } else if (lower.endsWith('profile.json') || lower === 'profile.json') {
-          profileEntry = entry;
-        } else if (!entry.dir && (lower.startsWith('media/') || lower.startsWith('profile_media/'))) {
-          mediaTasks.push(async () => {
-            const blob = await entry.async('blob');
-            const objUrl = URL.createObjectURL(blob);
-            vMediaBlobMap.set(relPath, objUrl);
-            vMediaBlobMap.set(relPath.split('/').pop(), objUrl);
-          });
-        }
-      });
-
-      if (!tweetsEntry) {
-        throw new Error('アーカイブ内に tweets.json が見つかりませんでした');
-      }
-
-      const tweetsText = await tweetsEntry.async('text');
-      vTweets = JSON.parse(tweetsText);
-
-      if (profileEntry) {
-        const profText = await profileEntry.async('text');
-        vProfile = JSON.parse(profText);
-      }
-
-      await Promise.all(mediaTasks.map(t => t()));
-      renderViewerAll(file.name);
-    } catch (err) {
-      console.error('Zip parse error:', err);
-      alert(`アーカイブの展開に失敗しました: ${err.message}`);
-    }
-  }
-
-  function resolveMedia(pathStr) {
-    if (!pathStr) return '';
-    if (vMediaBlobMap.has(pathStr)) return vMediaBlobMap.get(pathStr);
-    const fname = pathStr.split('/').pop();
-    if (vMediaBlobMap.has(fname)) return vMediaBlobMap.get(fname);
-    return pathStr;
-  }
-
-  function renderViewerAll(filename) {
-    if (viewerLoadedFilename) viewerLoadedFilename.textContent = `表示中: ${filename} (${vTweets.length.toLocaleString()} 件)`;
-    if (viewerContentWrapper) viewerContentWrapper.classList.remove('hidden');
-
-    // Profile Render
-    const author = vProfile || vTweets[0]?.author || {};
-    const vProfileName = document.getElementById('vProfileName');
-    const vProfileHandle = document.getElementById('vProfileHandle');
-    const vProfileBio = document.getElementById('vProfileBio');
-    const vAvatarImg = document.getElementById('vAvatarImg');
-    const vBannerImg = document.getElementById('vBannerImg');
-    const vFollowersCount = document.getElementById('vFollowersCount');
-    const vFollowingCount = document.getElementById('vFollowingCount');
-    const vTweetCount = document.getElementById('vTweetCount');
-
-    if (vProfileName) vProfileName.textContent = author.name || author.screen_name || 'X Archive';
-    if (vProfileHandle) vProfileHandle.textContent = `@${author.screen_name || ''}`;
-    if (vProfileBio) vProfileBio.textContent = author.description || '';
-    if (vFollowersCount) vFollowersCount.textContent = Number(author.followers || 0).toLocaleString();
-    if (vFollowingCount) vFollowingCount.textContent = Number(author.following || 0).toLocaleString();
-    if (vTweetCount) vTweetCount.textContent = vTweets.length.toLocaleString();
-
-    const avatarSrc = resolveMedia('profile_media/avatar.jpg') || author.avatar_url;
-    if (vAvatarImg && avatarSrc) vAvatarImg.src = avatarSrc;
-
-    const bannerSrc = resolveMedia('profile_media/banner.jpg') || author.banner_url;
-    if (vBannerImg && bannerSrc) {
-      vBannerImg.src = bannerSrc;
-      document.getElementById('vBannerWrapper').style.display = 'block';
-    } else {
-      document.getElementById('vBannerWrapper').style.display = 'none';
-    }
-
-    renderViewerTweets();
-  }
-
-  function renderViewerTweets() {
-    if (!viewerTweetsList) return;
-    const query = (viewerSearchInput?.value || '').toLowerCase().trim();
-
-    const filtered = vTweets.filter(t => {
-      const hasPhotos = t.media?.photos?.length > 0;
-      const hasVideos = t.media?.videos?.length > 0;
-
-      if (vFilter === 'media' && !hasPhotos && !hasVideos) return false;
-      if (vFilter === 'replies' && !t.replying_to) return false;
-
-      if (query) {
-        const textMatch = (t.text || '').toLowerCase().includes(query);
-        const authorMatch = (t.author?.name || '').toLowerCase().includes(query) || (t.author?.screen_name || '').toLowerCase().includes(query);
-        if (!textMatch && !authorMatch) return false;
-      }
-
-      return true;
-    });
-
-    if (filtered.length === 0) {
-      viewerTweetsList.innerHTML = '<div class="p-6 text-center text-muted" style="color: var(--text-muted); font-size: 13px;">該当するポストはありません</div>';
-      return;
-    }
-
-    viewerTweetsList.innerHTML = '';
-    filtered.forEach(t => {
-      const card = document.createElement('article');
-      card.className = 'v-tweet-card';
-
-      const author = t.author || vProfile || {};
-      const avatarSrc = resolveMedia('profile_media/avatar.jpg') || author.avatar_url || '';
-      const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-
-      // Media Grid
-      let mediaHtml = '';
-      const photos = t.media?.photos || [];
-      const videos = t.media?.videos || [];
-
-      if (photos.length > 0 || videos.length > 0) {
-        mediaHtml += `<div class="v-t-media-grid">`;
-        photos.forEach((p, idx) => {
-          const localSrc = resolveMedia(`media/${t.id}_photo_${idx + 1}.jpg`) || resolveMedia(p.url);
-          mediaHtml += `<img src="${localSrc}" alt="Photo" loading="lazy">`;
-        });
-        videos.forEach((v, idx) => {
-          const localSrc = resolveMedia(`media/${t.id}_video_${idx + 1}.mp4`) || resolveMedia(v.url);
-          mediaHtml += `<video controls preload="none"><source src="${localSrc}"></video>`;
-        });
-        mediaHtml += `</div>`;
-      }
-
-      card.innerHTML = `
-        <img src="${escapeHtml(avatarSrc)}" class="v-t-avatar" alt="Avatar">
-        <div class="v-t-content">
-          <div class="v-t-header">
-            <span class="v-t-name">${escapeHtml(author.name || author.screen_name || '')}</span>
-            <span class="v-t-handle mono">@${escapeHtml(author.screen_name || '')}</span>
-            <span class="v-t-date">· ${escapeHtml(dateStr)}</span>
-          </div>
-          <div class="v-t-body">${escapeHtml(t.text || '')}</div>
-          ${mediaHtml}
-          <div class="v-t-actions">
-            <div class="v-t-action-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-              <span>${Number(t.replies || 0).toLocaleString()}</span>
-            </div>
-            <div class="v-t-action-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-              <span>${Number(t.retweets || t.reposts || 0).toLocaleString()}</span>
-            </div>
-            <div class="v-t-action-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-              <span>${Number(t.likes || 0).toLocaleString()}</span>
-            </div>
-            <div class="v-t-action-item btn-export-png" style="color: var(--accent-primary); font-weight: 600;" data-id="${t.id}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-              <span>画像出力 (PNG)</span>
-            </div>
-          </div>
-        </div>
-      `;
-
-      card.querySelector('.btn-export-png')?.addEventListener('click', () => exportViewerTweetCard(t.id));
-      viewerTweetsList.appendChild(card);
-    });
-  }
-
-  // Export Tweet as 2x Retina PNG Card
-  async function exportViewerTweetCard(tweetId) {
-    const tweet = vTweets.find(x => String(x.id) === String(tweetId));
-    if (!tweet) return;
-
-    const author = tweet.author || vProfile || {};
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const width = 800;
-    const padding = 36;
-    const contentWidth = width - padding * 2;
-
-    ctx.font = '20px Inter, sans-serif';
-    const lines = [];
-    const rawLines = (tweet.text || '').split('\n');
-    rawLines.forEach(l => {
-      let cur = '';
-      for (let i = 0; i < l.length; i++) {
-        if (ctx.measureText(cur + l[i]).width > contentWidth) {
-          lines.push(cur);
-          cur = l[i];
-        } else {
-          cur += l[i];
-        }
-      }
-      lines.push(cur);
-    });
-
-    const textHeight = lines.length * 28;
-    const height = padding * 2 + 60 + textHeight + 70;
-
-    canvas.width = width * 2;
-    canvas.height = height * 2;
-    ctx.scale(2, 2);
-
-    // Background
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    ctx.fillStyle = isDark ? '#111318' : '#FFFFFF';
-    ctx.fillRect(0, 0, width, height);
-    ctx.strokeStyle = isDark ? '#2C3240' : '#E2E8F0';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, width, height);
-
-    // Header
-    ctx.fillStyle = isDark ? '#F3F4F6' : '#0F172A';
-    ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(author.name || author.screen_name || 'User', padding, padding + 24);
-    ctx.fillStyle = isDark ? '#6B7280' : '#64748B';
-    ctx.font = '14px Fira Code, monospace';
-    ctx.fillText(`@${author.screen_name || ''}`, padding, padding + 46);
-
-    // Body
-    ctx.fillStyle = isDark ? '#F3F4F6' : '#0F172A';
-    ctx.font = '18px Inter, sans-serif';
-    lines.forEach((ln, idx) => {
-      ctx.fillText(ln, padding, padding + 80 + idx * 28);
-    });
-
-    // Watermark
-    ctx.fillStyle = isDark ? '#4B5563' : '#94A3B8';
-    ctx.font = '12px Fira Code, monospace';
-    ctx.fillText('FxTwitter Archive Studio · by Hikaproj', padding, height - padding + 12);
-
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `tweet_${tweet.id}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }, 'image/png');
-  }
-
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -916,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadHistory() {
     if (!historyList) return;
     if (isTauri) {
-      historyList.innerHTML = '<p class="helper-text p-4">デスクトップ版では output フォルダ内に保存された .xarchpjzip または ZIP を上のビューアーで直接開くことができます。</p>';
+      historyList.innerHTML = '<p class="helper-text p-4">デスクトップ版では output フォルダ内に保存された .xarchpjzip または ZIP を独立Xビューアー（fxtweet-viewer）で直接開くことができます。</p>';
       return;
     }
     try {

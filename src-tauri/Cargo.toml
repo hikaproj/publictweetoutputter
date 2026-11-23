@@ -18,6 +18,10 @@ path = "src/main.rs"
 name = "fxtweet-cli"
 path = "src/bin/fxtweet-cli.rs"
 
+[[bin]]
+name = "fxtweet-viewer"
+path = "src/bin/fxtweet-viewer.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
 

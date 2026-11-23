@@ -133,6 +133,9 @@ if [[ "$DOWNLOADED" == true ]] && [[ -s "$DOWNLOADED_FILE" ]]; then
   if [[ -f "${TEMP_DIR}/fxtweet-studio" ]]; then
     install -m 755 "${TEMP_DIR}/fxtweet-studio" "${TARGET_DIR}/fxtweet-studio"
   fi
+  if [[ -f "${TEMP_DIR}/fxtweet-viewer" ]]; then
+    install -m 755 "${TEMP_DIR}/fxtweet-viewer" "${TARGET_DIR}/fxtweet-viewer"
+  fi
   echo "Binaries installed to ${TARGET_DIR}"
 else
   echo "Direct release binaries not yet uploaded for ${LATEST_TAG}."
@@ -140,8 +143,11 @@ fi
 
 echo "========================================================"
 echo "  Installation Completed Successfully!"
-echo "  - CLI: ${TARGET_DIR}/fxtweet-cli (or fxtweet)"
+echo "  - CLI:    ${TARGET_DIR}/fxtweet-cli (or fxtweet)"
 if [[ -f "${TARGET_DIR}/fxtweet-studio" ]]; then
-  echo "  - GUI: ${TARGET_DIR}/fxtweet-studio"
+  echo "  - Studio: ${TARGET_DIR}/fxtweet-studio"
+fi
+if [[ -f "${TARGET_DIR}/fxtweet-viewer" ]]; then
+  echo "  - Viewer: ${TARGET_DIR}/fxtweet-viewer"
 fi
 echo "========================================================"

@@ -206,14 +206,14 @@ jobs:
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os != 'macOS'
         working-directory: src-tauri
         run: |
-          cargo build --release --target ${{ matrix.target }} --bin fxtweet-cli --bin fxtweet-studio
+          cargo build --release --target ${{ matrix.target }} --bin fxtweet-cli --bin fxtweet-studio --bin fxtweet-viewer
 
       - name: Build Universal Binaries (macOS lipo)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
         working-directory: src-tauri
         run: |
-          cargo build --release --target x86_64-apple-darwin --bin fxtweet-cli --bin fxtweet-studio
-          cargo build --release --target aarch64-apple-darwin --bin fxtweet-cli --bin fxtweet-studio
+          cargo build --release --target x86_64-apple-darwin --bin fxtweet-cli --bin fxtweet-studio --bin fxtweet-viewer
+          cargo build --release --target aarch64-apple-darwin --bin fxtweet-cli --bin fxtweet-studio --bin fxtweet-viewer
           mkdir -p ../release-bin
           lipo -create -output ../release-bin/fxtweet-cli \
             target/x86_64-apple-darwin/release/fxtweet-cli \
@@ -221,6 +221,9 @@ jobs:
           lipo -create -output ../release-bin/fxtweet-studio \
             target/x86_64-apple-darwin/release/fxtweet-studio \
             target/aarch64-apple-darwin/release/fxtweet-studio
+          lipo -create -output ../release-bin/fxtweet-viewer \
+            target/x86_64-apple-darwin/release/fxtweet-viewer \
+            target/aarch64-apple-darwin/release/fxtweet-viewer
 
       - name: Package Desktop Artifacts (Windows)
         if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Windows'
@@ -229,6 +232,9 @@ jobs:
           Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-cli.exe -Destination release-bin/ -Force
           if (Test-Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe) {
             Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-studio.exe -Destination release-bin/ -Force
+          }
+          if (Test-Path src-tauri/target/${{ matrix.target }}/release/fxtweet-viewer.exe) {
+            Copy-Item -Path src-tauri/target/${{ matrix.target }}/release/fxtweet-viewer.exe -Destination release-bin/ -Force
           }
           Copy-Item -Path README.md, DOCS.md, CLI.md -Destination release-bin/ -Force
           $MainZip = "fxtweet-studio-windows-x86_64-v${env:VERSION}.zip"
@@ -240,7 +246,7 @@ jobs:
         run: |
           cp README.md DOCS.md CLI.md release-bin/
           MAIN_TAR="fxtweet-studio-macos-universal-v${VERSION}.tar.gz"
-          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio README.md DOCS.md CLI.md
+          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio fxtweet-viewer README.md DOCS.md CLI.md
           cp "$MAIN_TAR" fxtweet-studio-macos-cli.tar.gz
 
       - name: Package Desktop Artifacts (Linux / Debian / Arch)
@@ -251,9 +257,12 @@ jobs:
           if [ -f src-tauri/target/${{ matrix.target }}/release/fxtweet-studio ]; then
             cp src-tauri/target/${{ matrix.target }}/release/fxtweet-studio release-bin/
           fi
+          if [ -f src-tauri/target/${{ matrix.target }}/release/fxtweet-viewer ]; then
+            cp src-tauri/target/${{ matrix.target }}/release/fxtweet-viewer release-bin/
+          fi
           cp README.md DOCS.md CLI.md release-bin/
           MAIN_TAR="fxtweet-studio-linux-x86_64-v${VERSION}.tar.gz"
-          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio README.md DOCS.md CLI.md
+          tar -czf "$MAIN_TAR" -C release-bin fxtweet-cli fxtweet-studio fxtweet-viewer README.md DOCS.md CLI.md
           cp "$MAIN_TAR" fxtweet-studio-linux-cli.tar.gz
           
           # Arch Linux PKGBUILD generation (self-contained package)
@@ -267,14 +276,15 @@ jobs:
             echo 'url="https://github.com/Hikaproj/publictweetoutputter"'
             echo "license=('MIT')"
             echo "depends=('webkit2gtk-4.1' 'gtk3' 'openssl')"
-            echo "source=('fxtweet-cli' 'fxtweet-studio')"
-            echo "sha256sums=('SKIP' 'SKIP')"
+            echo "source=('fxtweet-cli' 'fxtweet-studio' 'fxtweet-viewer')"
+            echo "sha256sums=('SKIP' 'SKIP' 'SKIP')"
             echo 'package() {'
             echo '    install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-cli"'
             echo '    install -Dm755 "${srcdir}/fxtweet-studio" "${pkgdir}/usr/bin/fxtweet-studio"'
+            echo '    install -Dm755 "${srcdir}/fxtweet-viewer" "${pkgdir}/usr/bin/fxtweet-viewer"'
             echo '}'
           } > release-bin/PKGBUILD
-          tar -czf "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" -C release-bin PKGBUILD fxtweet-cli fxtweet-studio
+          tar -czf "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" -C release-bin PKGBUILD fxtweet-cli fxtweet-studio fxtweet-viewer
           cp "fxtweet-studio-arch-x86_64-v${VERSION}.tar.gz" fxtweet-studio-arch-package.tar.gz
 
       - name: Upload Platform Artifacts
@@ -351,9 +361,9 @@ jobs:
             ```
 
             ### Downloads:
-            - **Windows GUI & CLI**: `fxtweet-studio-windows-x86_64-v${{ steps.get_version.outputs.VERSION }}.zip` (contains `fxtweet-studio.exe` GUI & `fxtweet-cli.exe` CLI)
-            - **macOS Universal GUI & CLI**: `fxtweet-studio-macos-universal-v${{ steps.get_version.outputs.VERSION }}.tar.gz` (Universal binary for Intel & Apple Silicon)
-            - **Linux GUI & CLI**: `fxtweet-studio-linux-x86_64-v${{ steps.get_version.outputs.VERSION }}.tar.gz`
+            - **Windows GUI, Viewer & CLI**: `fxtweet-studio-windows-x86_64-v${{ steps.get_version.outputs.VERSION }}.zip` (contains `fxtweet-studio.exe` GUI, `fxtweet-viewer.exe` Viewer, and `fxtweet-cli.exe` CLI)
+            - **macOS Universal GUI, Viewer & CLI**: `fxtweet-studio-macos-universal-v${{ steps.get_version.outputs.VERSION }}.tar.gz` (Universal binary for Intel & Apple Silicon)
+            - **Linux GUI, Viewer & CLI**: `fxtweet-studio-linux-x86_64-v${{ steps.get_version.outputs.VERSION }}.tar.gz`
             - **Arch Linux Package**: `fxtweet-studio-arch-x86_64-v${{ steps.get_version.outputs.VERSION }}.tar.gz` (includes `PKGBUILD`)
             - **Docker Edition**: `fxtweet-studio-docker-v${{ steps.get_version.outputs.VERSION }}.zip` (Self-contained Dockerfile & compose)
             - **Node.js Edition**: `fxtweet-studio-nodejs-v${{ steps.get_version.outputs.VERSION }}.zip` / `.tar.gz`

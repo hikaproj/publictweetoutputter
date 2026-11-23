@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -63,6 +63,27 @@ pub(crate) async fn stop_backup(
 }
 
 #[tauri::command]
+pub(crate) async fn open_viewer_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(existing) = app.get_webview_window("viewer") {
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "viewer",
+        tauri::WebviewUrl::App("viewer.html".into())
+    )
+    .title("FxTwitter Archive Viewer - by Hikaproj")
+    .inner_size(1366.0, 860.0)
+    .min_inner_size(900.0, 600.0)
+    .resizable(true)
+    .build()
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) async fn open_archive_native(file_path: String) -> Result<ArchivePayload, String> {
     let path = Path::new(&file_path);
     if !path.exists() {
@@ -119,4 +140,27 @@ pub(crate) async fn open_archive_native(file_path: String) -> Result<ArchivePayl
         media_files,
         message: "Archive opened successfully via Rust native engine".to_string(),
     })
+}
+
+#[tauri::command]
+pub(crate) async fn open_viewer_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("viewer") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "viewer",
+        tauri::WebviewUrl::App("viewer.html".into()),
+    )
+    .title("FxTwitter Archive Viewer - by Hikaproj")
+    .inner_size(1200.0, 850.0)
+    .min_inner_size(800.0, 600.0)
+    .resizable(true)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }

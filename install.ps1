@@ -84,7 +84,8 @@ Write-Host ""
 Write-Host "========================================================" -ForegroundColor Green
 Write-Host "  Installation Completed Successfully!" -ForegroundColor Green
 Write-Host "  Target Directory: $TargetDir" -ForegroundColor Green
-Write-Host "  - GUI App:  $TargetDir\fxtweet-studio.exe" -ForegroundColor Green
-Write-Host "  - CLI Tool: $TargetDir\fxtweet-cli.exe" -ForegroundColor Green
-Write-Host "  Run 'fxtweet-cli --help' or double-click fxtweet-studio.exe." -ForegroundColor Green
+Write-Host "  - GUI App:    $TargetDir\fxtweet-studio.exe" -ForegroundColor Green
+Write-Host "  - Viewer App: $TargetDir\fxtweet-viewer.exe" -ForegroundColor Green
+Write-Host "  - CLI Tool:   $TargetDir\fxtweet-cli.exe" -ForegroundColor Green
+Write-Host "  Run 'fxtweet-cli --help' or double-click fxtweet-studio.exe / fxtweet-viewer.exe." -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Green

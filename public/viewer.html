@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>X Archive Viewer</title>
+  <title>FxTwitter Archive Viewer - by Hikaproj</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
   </script>
   <style>
     /* ==========================================================================
-       X (Twitter) Authentic Design Tokens - Light, Dim, and Dark (Lights Out)
+       X (Twitter) Authentic Design Tokens - Light (Default), Dim, and Dark
        ========================================================================== */
     :root {
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -26,14 +26,16 @@
       --like-pink: #F91880;
     }
 
-    [data-theme="dark"] {
-      --bg: #000000;
-      --bg-surface: #16181C;
-      --bg-surface-hover: #181818;
-      --border: #2F3336;
-      --text-main: #E7E9EA;
-      --text-sub: #71767B;
-      --header-bg: rgba(0, 0, 0, 0.75);
+    [data-theme="light"] {
+      --bg: #FFFFFF;
+      --bg-surface: #F7F9F9;
+      --bg-surface-hover: #EFF3F4;
+      --border: #EFF3F4;
+      --border-dark: #CFD9DE;
+      --text-main: #0F1419;
+      --text-sub: #536471;
+      --header-bg: rgba(255, 255, 255, 0.85);
+      --card-hover: rgba(0, 0, 0, 0.03);
     }
 
     [data-theme="dim"] {
@@ -41,19 +43,23 @@
       --bg-surface: #1E2732;
       --bg-surface-hover: #22303C;
       --border: #38444D;
+      --border-dark: #536471;
       --text-main: #F7F9F9;
       --text-sub: #8B98A5;
-      --header-bg: rgba(21, 32, 43, 0.75);
+      --header-bg: rgba(21, 32, 43, 0.85);
+      --card-hover: rgba(255, 255, 255, 0.03);
     }
 
-    [data-theme="light"] {
-      --bg: #FFFFFF;
-      --bg-surface: #F7F9F9;
-      --bg-surface-hover: #EFF3F4;
-      --border: #EFF3F4;
-      --text-main: #0F1419;
-      --text-sub: #536471;
-      --header-bg: rgba(255, 255, 255, 0.85);
+    [data-theme="dark"] {
+      --bg: #000000;
+      --bg-surface: #16181C;
+      --bg-surface-hover: #181818;
+      --border: #2F3336;
+      --border-dark: #536471;
+      --text-main: #E7E9EA;
+      --text-sub: #71767B;
+      --header-bg: rgba(0, 0, 0, 0.85);
+      --card-hover: rgba(255, 255, 255, 0.03);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -66,6 +72,7 @@
       min-height: 100vh;
       display: flex;
       justify-content: center;
+      overflow-y: scroll;
     }
 
     .x-app {
@@ -75,9 +82,11 @@
       min-height: 100vh;
     }
 
-    /* Left Sidebar */
+    /* --------------------------------------------------------------------------
+       Left Sidebar Navigation
+       -------------------------------------------------------------------------- */
     .x-sidebar-left {
-      width: 260px;
+      width: 250px;
       padding: 12px 16px;
       border-right: 1px solid var(--border);
       position: sticky;
@@ -86,23 +95,32 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      flex-shrink: 0;
     }
 
     .x-logo-wrap {
       padding: 10px;
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
       cursor: pointer;
       border-radius: 9999px;
       width: fit-content;
       color: var(--text-main);
+      transition: background 0.15s;
     }
     .x-logo-wrap:hover { background-color: var(--bg-surface-hover); }
+    .x-logo-badge {
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.5px;
+    }
 
     .nav-list {
+      margin-top: 16px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      margin-top: 16px;
+      gap: 6px;
     }
 
     .nav-item {
@@ -111,94 +129,84 @@
       gap: 16px;
       padding: 12px 16px;
       border-radius: 9999px;
-      font-weight: 700;
       font-size: 18px;
+      font-weight: 600;
       color: var(--text-main);
       cursor: pointer;
+      transition: background-color 0.15s;
       user-select: none;
-      transition: background 0.15s;
     }
     .nav-item:hover { background-color: var(--bg-surface-hover); }
-    .nav-item.active { font-weight: 800; color: var(--accent); }
-    .nav-item svg { width: 22px; height: 22px; stroke-width: 2; }
+    .nav-item.active { font-weight: 800; }
+    .nav-item svg { width: 24px; height: 24px; flex-shrink: 0; }
 
-    /* Theme Selector in Sidebar */
     .theme-picker {
-      padding: 12px;
-      background-color: var(--bg-surface);
-      border-radius: 16px;
-      border: 1px solid var(--border);
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       gap: 8px;
-      margin-top: auto;
-      margin-bottom: 12px;
     }
-
     .theme-label {
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 600;
       color: var(--text-sub);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
     }
-
     .theme-buttons {
       display: flex;
-      gap: 6px;
+      background-color: var(--bg-surface);
+      padding: 3px;
+      border-radius: 9999px;
+      border: 1px solid var(--border);
     }
-
     .theme-btn {
       flex: 1;
-      padding: 6px 8px;
-      border-radius: 9999px;
-      font-size: 12px;
+      padding: 6px 0;
+      border: none;
+      background: transparent;
+      font-size: 13px;
       font-weight: 600;
-      border: 1px solid var(--border);
-      background-color: var(--bg);
-      color: var(--text-main);
+      color: var(--text-sub);
       cursor: pointer;
-      text-align: center;
+      border-radius: 9999px;
+      transition: all 0.15s;
     }
     .theme-btn.active {
-      border-color: var(--accent);
-      color: var(--accent);
+      background-color: var(--bg);
+      color: var(--text-main);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Center Feed */
+    /* --------------------------------------------------------------------------
+       Center Feed Column (Max 600px, Exact X Width)
+       -------------------------------------------------------------------------- */
     .x-feed-column {
-      flex: 1;
-      max-width: 620px;
-      border-right: 1px solid var(--border);
+      width: 600px;
       min-height: 100vh;
+      border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
+      flex-shrink: 0;
     }
 
     .feed-header {
       position: sticky;
       top: 0;
-      z-index: 30;
+      z-index: 100;
       background-color: var(--header-bg);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
       padding: 10px 16px;
       display: flex;
       align-items: center;
       gap: 20px;
-    }
-
-    .header-titles {
-      display: flex;
-      flex-direction: column;
+      border-bottom: 1px solid var(--border);
     }
 
     .header-user-name {
+      font-size: 18px;
       font-weight: 800;
-      font-size: 19px;
-      line-height: 1.2;
+      display: block;
     }
-
     .header-post-count {
       font-size: 12px;
       color: var(--text-sub);
@@ -213,7 +221,7 @@
 
     .profile-banner {
       width: 100%;
-      height: 180px;
+      height: 190px;
       background-color: var(--bg-surface);
       overflow: hidden;
     }
@@ -242,45 +250,120 @@
       gap: 2px;
     }
 
-    .p-display-name { font-weight: 800; font-size: 19px; }
+    .p-display-name { font-weight: 800; font-size: 19px; display: inline-flex; align-items: center; gap: 4px; }
     .p-handle { color: var(--text-sub); font-size: 14px; font-family: var(--font-mono); }
-    .p-bio { margin-top: 10px; font-size: 14px; line-height: 1.4; color: var(--text-main); }
+    .p-bio { margin-top: 10px; font-size: 14px; line-height: 1.45; color: var(--text-main); white-space: pre-wrap; }
 
     .p-meta-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 14px;
       margin-top: 10px;
       font-size: 13px;
       color: var(--text-sub);
     }
     .p-meta-item { display: inline-flex; align-items: center; gap: 4px; }
-    .p-meta-item svg { width: 14px; height: 14px; }
+    .p-meta-item svg { width: 15px; height: 15px; }
 
     .p-counts-row {
       display: flex;
-      gap: 16px;
+      gap: 18px;
       margin-top: 12px;
       font-size: 13px;
     }
     .p-counts-row span strong { color: var(--text-main); font-weight: 700; }
     .p-counts-row span { color: var(--text-sub); }
 
-    /* Tweet Cards */
+    /* Feed Navigation Tabs */
+    .profile-nav-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background-color: var(--bg);
+    }
+    .profile-nav-tab {
+      flex: 1;
+      text-align: center;
+      padding: 14px 0;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-sub);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .profile-nav-tab:hover { background-color: var(--bg-surface-hover); color: var(--text-main); }
+    .profile-nav-tab.active {
+      color: var(--text-main);
+      border-bottom-color: var(--accent);
+      font-weight: 800;
+    }
+
+    /* --------------------------------------------------------------------------
+       X (Twitter) Tweet Items & Reposts
+       -------------------------------------------------------------------------- */
+    .tweets-stream {
+      display: flex;
+      flex-direction: column;
+    }
+
     .tweet-item {
-      padding: 14px 16px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--border);
       display: flex;
-      gap: 12px;
+      flex-direction: column;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background-color 0.15s;
     }
-    .tweet-item:hover { background-color: var(--bg-surface-hover); }
+    .tweet-item:hover { background-color: var(--card-hover); }
 
-    .tweet-left-avatar {
+    /* Repost Header Context Banner */
+    .tweet-context-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-sub);
+      margin-left: 36px;
+      margin-bottom: 6px;
+    }
+    .tweet-context-icon {
+      display: flex;
+      align-items: center;
+      color: var(--retweet-green);
+    }
+    .tweet-context-icon svg {
+      width: 15px;
+      height: 15px;
+    }
+    .tweet-context-text {
+      color: var(--text-sub);
+    }
+    .tweet-context-row:hover .tweet-context-text {
+      text-decoration: underline;
+    }
+
+    /* Reply Subheader */
+    .tweet-reply-row {
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+    }
+    .tweet-reply-row span {
+      color: var(--accent);
+    }
+
+    /* Tweet Main Body Row */
+    .tweet-main-body {
+      display: flex;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .tweet-avatar {
       width: 40px;
       height: 40px;
-      border-radius: 50%;
+      border-radius: 9999px;
       object-fit: cover;
       flex-shrink: 0;
       background-color: var(--bg-surface);
@@ -291,47 +374,36 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 4px;
     }
-
-    .tweet-sub-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-sub);
-      margin-bottom: 2px;
-    }
-    .tweet-sub-header svg { width: 13px; height: 13px; }
 
     .tweet-author-line {
       display: flex;
       align-items: baseline;
-      gap: 6px;
-      font-size: 14px;
+      gap: 5px;
+      font-size: 14.5px;
       flex-wrap: wrap;
     }
     .t-author-name { font-weight: 700; color: var(--text-main); }
-    .t-author-handle { color: var(--text-sub); font-size: 13px; }
-    .t-dot { color: var(--text-sub); }
-    .t-date { color: var(--text-sub); font-size: 13px; }
+    .t-author-handle { color: var(--text-sub); font-size: 14px; }
+    .t-dot { color: var(--text-sub); font-size: 13px; }
+    .t-date { color: var(--text-sub); font-size: 14px; }
 
     .tweet-text {
-      font-size: 14.5px;
+      font-size: 15px;
       line-height: 1.45;
       color: var(--text-main);
       word-break: break-word;
       white-space: pre-wrap;
+      margin-top: 4px;
     }
 
-    /* Media Grids */
+    /* Media Frames */
     .tweet-media-frame {
       margin-top: 10px;
       border-radius: 16px;
       border: 1px solid var(--border);
       overflow: hidden;
-      max-height: 420px;
+      max-height: 440px;
       display: grid;
       gap: 2px;
       background-color: var(--border);
@@ -352,40 +424,70 @@
       background-color: var(--bg-surface);
     }
 
-    /* Quote Box */
+    /* Quote Tweet Box */
     .quote-box {
       margin-top: 10px;
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 10px 12px;
+      border-radius: 16px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      background-color: var(--bg-surface);
+      gap: 6px;
+      background-color: transparent;
+      transition: background 0.15s;
+    }
+    .quote-box:hover { background-color: var(--card-hover); }
+
+    .quote-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13.5px;
+    }
+    .quote-avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: 9999px;
+      object-fit: cover;
+    }
+    .quote-author-name { font-weight: 700; color: var(--text-main); }
+    .quote-author-handle, .quote-dot, .quote-date { color: var(--text-sub); font-size: 13px; }
+    .quote-text {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--text-main);
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     /* Action Counters */
     .tweet-actions-bar {
       display: flex;
       justify-content: space-between;
-      max-width: 440px;
-      margin-top: 8px;
+      max-width: 460px;
+      margin-top: 10px;
       color: var(--text-sub);
-      font-size: 12px;
+      font-size: 13px;
     }
     .action-badge {
       display: flex;
       align-items: center;
       gap: 6px;
       cursor: pointer;
-      user-select: none;
+      transition: color 0.15s;
     }
-    .action-badge svg { width: 15px; height: 15px; stroke-width: 1.75; }
+    .action-badge svg { width: 16px; height: 16px; }
     .action-badge:hover { color: var(--accent); }
+    .action-badge.repost:hover { color: var(--retweet-green); }
+    .action-badge.like:hover { color: var(--like-pink); }
+    .action-badge.export:hover { color: var(--accent-hover); }
 
-    /* Right Sidebar (Filters & Search) */
+    /* --------------------------------------------------------------------------
+       Right Sidebar
+       -------------------------------------------------------------------------- */
     .x-sidebar-right {
-      width: 320px;
+      flex: 1;
+      max-width: 380px;
       padding: 12px 20px;
       position: sticky;
       top: 0;
@@ -393,94 +495,69 @@
       display: flex;
       flex-direction: column;
       gap: 16px;
+      overflow-y: auto;
     }
 
     .search-box {
       background-color: var(--bg-surface);
-      border: 1px solid var(--border);
       border-radius: 9999px;
-      padding: 8px 14px;
+      padding: 10px 16px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      border: 1px solid transparent;
+      transition: all 0.15s;
     }
-    .search-box svg { width: 16px; height: 16px; color: var(--text-sub); }
+    .search-box:focus-within {
+      background-color: var(--bg);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .search-box svg { width: 16px; height: 16px; color: var(--text-sub); flex-shrink: 0; }
     .search-box input {
-      background: transparent;
       border: none;
-      color: var(--text-main);
-      font-size: 13.5px;
+      background: transparent;
       outline: none;
       width: 100%;
+      color: var(--text-main);
+      font-size: 14px;
     }
 
-    .filter-panel {
+    .sidebar-panel {
       background-color: var(--bg-surface);
-      border: 1px solid var(--border);
       border-radius: 16px;
       padding: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      border: 1px solid var(--border);
     }
-    .panel-title { font-weight: 800; font-size: 16px; color: var(--text-main); }
+    .panel-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
 
     .filter-check {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
-      cursor: pointer;
+      font-size: 13.5px;
       color: var(--text-main);
-    }
-    .filter-check input { accent-color: var(--accent); width: 15px; height: 15px; }
-
-    .file-loader-btn {
-      padding: 8px 14px;
-      border-radius: 9999px;
-      font-weight: 700;
-      font-size: 13px;
-      background-color: var(--text-main);
-      color: var(--bg);
-      border: none;
+      margin-bottom: 8px;
       cursor: pointer;
-      text-align: center;
     }
 
     .drop-zone {
-      border: 2px dashed var(--border);
+      border: 2px dashed var(--border-dark);
       border-radius: 12px;
-      padding: 14px 10px;
+      padding: 20px 14px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.15s, background-color 0.15s;
+      transition: all 0.15s;
+      margin-top: 10px;
+      background-color: var(--bg);
     }
-    .drop-zone:hover, .drop-zone.drag-over {
+    .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--accent);
       background-color: var(--bg-surface-hover);
-    }
-
-    .toast-notification {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: var(--accent);
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 600;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-      z-index: 1000;
-      pointer-events: none;
-      animation: toastFade 2.8s forwards;
-    }
-    @keyframes toastFade {
-      0% { opacity: 0; transform: translate(-50%, 15px); }
-      12% { opacity: 1; transform: translate(-50%, 0); }
-      85% { opacity: 1; transform: translate(-50%, 0); }
-      100% { opacity: 0; transform: translate(-50%, -10px); }
     }
 
     .empty-notice {
@@ -489,17 +566,38 @@
       color: var(--text-sub);
       font-size: 14px;
     }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: var(--accent);
+      color: #FFFFFF;
+      padding: 10px 20px;
+      border-radius: 9999px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
   <div class="x-app">
-    <!-- Left Sidebar -->
+    <!-- Left Navigation Sidebar -->
     <aside class="x-sidebar-left">
       <div>
-        <div class="x-logo-wrap" title="X Archive Viewer">
+        <div class="x-logo-wrap" title="FxTwitter Archive Viewer">
           <svg viewBox="0 0 24 24" fill="currentColor" style="width: 28px; height: 28px;">
             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
           </svg>
+          <span class="x-logo-badge">Viewer</span>
         </div>
 
         <nav class="nav-list">
@@ -518,29 +616,33 @@
         </nav>
       </div>
 
-      <!-- Theme Switcher -->
-      <div class="theme-picker">
-        <span class="theme-label">外観 (Theme)</span>
-        <div class="theme-buttons">
-          <button type="button" class="theme-btn active" data-set-theme="light">ライト</button>
-          <button type="button" class="theme-btn" data-set-theme="dim">Dim</button>
-          <button type="button" class="theme-btn" data-set-theme="dark">ダーク</button>
+      <!-- Theme Switcher & Credits -->
+      <div>
+        <div class="theme-picker">
+          <span class="theme-label">外観テーマ</span>
+          <div class="theme-buttons">
+            <button type="button" class="theme-btn active" data-set-theme="light">ライト</button>
+            <button type="button" class="theme-btn" data-set-theme="dim">Dim</button>
+            <button type="button" class="theme-btn" data-set-theme="dark">ダーク</button>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-sub); margin-top: 14px; line-height: 1.4;">
+          FxTwitter Archive Studio<br>Created by <strong>Hikaproj</strong>
         </div>
       </div>
     </aside>
 
-    <!-- Center Feed Column -->
+    <!-- Center Timeline Column -->
     <main class="x-feed-column">
-      <!-- Sticky Header -->
       <header class="feed-header">
         <div class="header-titles">
           <span class="header-user-name" id="topHeaderName">X Archive</span>
-          <span class="header-post-count" id="topHeaderSub">読み込み中...</span>
+          <span class="header-post-count" id="topHeaderSub">アーカイブを選択してください</span>
         </div>
       </header>
 
       <!-- Profile Header Area -->
-      <section class="profile-hero" id="profileHeroArea">
+      <section class="profile-hero" id="profileHeroArea" style="display: none;">
         <div class="profile-banner">
           <img id="viewBannerImg" src="" alt="Banner">
         </div>
@@ -559,11 +661,19 @@
             <span><strong id="viewFollowersCount">0</strong> フォロワー</span>
           </div>
         </div>
+
+        <div class="profile-nav-tabs">
+          <div class="profile-nav-tab active" data-view="all">ポスト</div>
+          <div class="profile-nav-tab" data-view="replies">返信</div>
+          <div class="profile-nav-tab" data-view="media">メディア</div>
+        </div>
       </section>
 
       <!-- Tweets Stream Container -->
       <section id="tweetsList" class="tweets-stream">
-        <div class="empty-notice">データを読み込んでいます...</div>
+        <div class="empty-notice">
+          右サイドバーから <strong>.xarchpjzip</strong> または <strong>.zip</strong> アーカイブを開いてください
+        </div>
       </section>
     </main>
 
@@ -571,313 +681,259 @@
     <aside class="x-sidebar-right">
       <div class="search-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" id="searchInput" placeholder="アーカイブ内を検索">
+        <input type="text" id="searchInput" placeholder="アーカイブ内を検索...">
       </div>
 
-      <div class="filter-panel">
+      <div class="sidebar-panel">
         <h3 class="panel-title">絞り込みフィルタ</h3>
         <label class="filter-check">
-          <input type="checkbox" id="checkOnlyMedia"> 画像/動画付きのみ
+          <input type="checkbox" id="checkOnlyMedia"> 画像・動画付きのみ
         </label>
         <label class="filter-check">
-          <input type="checkbox" id="checkNoReplies" checked> 返信を除外
+          <input type="checkbox" id="checkNoReplies"> 返信を除外
         </label>
         <label class="filter-check">
           <input type="checkbox" id="checkNoReposts"> リポストを除外
         </label>
       </div>
 
-      <div class="filter-panel">
-        <h3 class="panel-title">アーカイブ / JSON の読込</h3>
-        <p style="font-size: 12px; color: var(--text-sub);">
-          出力された <code>.zip</code> や <code>.xarchpjzip</code>、または <code>tweets.json</code> を直接ドラッグ＆ドロップまたは選択して閲覧できます。
+      <div class="sidebar-panel">
+        <h3 class="panel-title">アーカイブの読み込み</h3>
+        <p style="font-size: 12px; color: var(--text-sub); line-height: 1.4;">
+          <strong>.xarchpjzip</strong> または <strong>.zip</strong> を選択するか、画面上にドラッグ＆ドロップしてください。
         </p>
-        <input type="file" id="filePicker" accept=".json,.zip,.xarchpjzip" style="display: none;">
+        <input type="file" id="filePicker" accept=".xarchpjzip,.zip,.json,.tar,.gz" style="display: none;">
         <div class="drop-zone" id="dropZone" onclick="document.getElementById('filePicker').click()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 24px; height: 24px; margin: 0 auto 6px; display: block; color: var(--text-sub);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 28px; height: 28px; margin: 0 auto 6px; display: block; color: var(--accent);">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
-          <span style="font-size: 12px; font-weight: 600; color: var(--text-main);" id="dropZoneText">.zip / .xarchpjzip / JSON を選択</span>
+          <span style="font-size: 13px; font-weight: 700; color: var(--text-main);" id="dropZoneText">.xarchpjzip / .zip を選択</span>
+          <div style="font-size: 11px; color: var(--text-sub); margin-top: 4px;">またはここにファイルをドロップ</div>
         </div>
-        <div id="archiveLoadStatus" style="font-size: 11px; color: var(--accent); font-family: var(--font-mono); display: none; margin-top: 4px;"></div>
+      </div>
+
+      <!-- Archive Info Panel -->
+      <div class="sidebar-panel" id="archiveInfoPanel" style="display: none;">
+        <h3 class="panel-title">アーカイブ情報</h3>
+        <div style="font-size: 12.5px; color: var(--text-sub); display: flex; flex-direction: column; gap: 6px;">
+          <div>ファイル: <strong id="infoFileName" class="mono" style="color: var(--text-main);"></strong></div>
+          <div>総ポスト数: <strong id="infoTotalTweets" style="color: var(--text-main);"></strong></div>
+          <div>メディアファイル: <strong id="infoMediaCount" style="color: var(--text-main);"></strong></div>
+        </div>
       </div>
     </aside>
   </div>
 
+  <div id="toast" class="toast">通知</div>
+
   <script>
-    // X Archive Viewer Application - Crafted by Hikaproj
+    // ==========================================================================
+    // Core Application State
+    // ==========================================================================
+    const isTauri = Boolean(window.__TAURI__?.core?.invoke);
     let allTweets = [];
     let userProfile = null;
-    let currentFilterView = 'all';
-    const archiveMediaMap = new Map(); // e.g. "media/..." -> objectUrl
+    let archiveSummary = null;
+    let currentFilterView = 'all'; // 'all', 'media', 'replies'
+    const cachedBlobs = new Map();
 
-    // Theme Switcher (Default: Light Mode)
-    const themeButtons = document.querySelectorAll('[data-set-theme]');
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // Theme Management (Light standard, Dim, Dark)
+    const themeButtons = document.querySelectorAll('.theme-btn');
     themeButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        const t = btn.getAttribute('data-set-theme');
-        applyViewerTheme(t);
+        const theme = btn.getAttribute('data-set-theme');
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('fxtweet_viewer_theme', theme);
+        themeButtons.forEach(b => b.classList.toggle('active', b === btn));
       });
     });
 
-    function applyViewerTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      themeButtons.forEach(b => {
-        if (b.getAttribute('data-set-theme') === theme) b.classList.add('active');
-        else b.classList.remove('active');
+    const savedTheme = localStorage.getItem('fxtweet_viewer_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    themeButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-set-theme') === savedTheme));
+
+    // Filter Tabs
+    const navItems = document.querySelectorAll('.nav-item');
+    const profileTabs = document.querySelectorAll('.profile-nav-tab');
+
+    function setFilterView(view) {
+      currentFilterView = view;
+      navItems.forEach(n => n.classList.toggle('active', n.getAttribute('data-view') === view));
+      profileTabs.forEach(n => n.classList.toggle('active', n.getAttribute('data-view') === view));
+      renderTweets();
+    }
+
+    navItems.forEach(n => n.addEventListener('click', () => setFilterView(n.getAttribute('data-view'))));
+    profileTabs.forEach(n => n.addEventListener('click', () => setFilterView(n.getAttribute('data-view'))));
+
+    // File Drop & Selection
+    const filePicker = document.getElementById('filePicker');
+    const dropZone = document.getElementById('dropZone');
+
+    filePicker.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) handleIncomingFile(file);
+    });
+
+    ['dragenter', 'dragover'].forEach(ev => {
+      window.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
       });
-      localStorage.setItem('x_archive_theme', theme);
+    });
+
+    ['dragleave', 'drop'].forEach(ev => {
+      window.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+      });
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (file) handleIncomingFile(file);
+    });
+
+    async function handleIncomingFile(file) {
+      document.getElementById('dropZoneText').textContent = file.name;
+      showToast(`アーカイブ読み込み中: ${file.name}`);
+
+      // Try Native Rust IPC first if running inside Tauri Desktop
+      if (isTauri && file.path) {
+        try {
+          const res = await window.__TAURI__.core.invoke('open_archive_native', { filePath: file.path });
+          if (res && res.success) {
+            allTweets = res.tweets || [];
+            userProfile = res.profile || null;
+            archiveSummary = res.summary || null;
+            cachedBlobs.clear();
+            renderAll(file.name, res.media_files?.length || 0);
+            showToast(`展開完了: ${allTweets.length} 件のポスト`);
+            return;
+          }
+        } catch (ipcErr) {
+          console.warn('Native open failed, falling back to JSZip client parser:', ipcErr);
+        }
+      }
+
+      // Browser JSZip Fallback (Supports .xarchpjzip and .zip)
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.zip') || name.endsWith('.xarchpjzip')) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          cachedBlobs.clear();
+
+          // 1. tweets.json
+          const tweetsFile = Object.values(zip.files).find(f => f.name.endsWith('tweets.json') && !f.dir);
+          if (tweetsFile) {
+            const jsonText = await tweetsFile.async('text');
+            allTweets = JSON.parse(jsonText);
+          }
+
+          // 2. profile.json
+          const profileFile = Object.values(zip.files).find(f => f.name.endsWith('profile.json') && !f.dir);
+          if (profileFile) {
+            const jsonText = await profileFile.async('text');
+            userProfile = JSON.parse(jsonText);
+          }
+
+          // 3. summary.json
+          const summaryFile = Object.values(zip.files).find(f => f.name.endsWith('summary.json') && !f.dir);
+          if (summaryFile) {
+            const jsonText = await summaryFile.async('text');
+            archiveSummary = JSON.parse(jsonText);
+          }
+
+          // 4. Cache media files
+          let mediaCount = 0;
+          for (const [path, entry] of Object.entries(zip.files)) {
+            if (!entry.dir && (path.includes('media/') || path.includes('profile_media/'))) {
+              const blob = await entry.async('blob');
+              const blobUrl = URL.createObjectURL(blob);
+              const cleanKey = path.replace(/^.*?(media\/|profile_media\/)/, '$1');
+              cachedBlobs.set(cleanKey, blobUrl);
+              cachedBlobs.set(path, blobUrl);
+              mediaCount++;
+            }
+          }
+
+          renderAll(file.name, mediaCount);
+          showToast(`展開完了: ${allTweets.length} 件のポスト`);
+        } catch (err) {
+          console.error(err);
+          alert(`アーカイブ展開エラー: ${err.message}`);
+        }
+      } else if (name.endsWith('.json')) {
+        try {
+          const text = await file.text();
+          allTweets = JSON.parse(text);
+          renderAll(file.name, 0);
+          showToast(`JSON読み込み完了: ${allTweets.length} 件`);
+        } catch (err) {
+          alert(`JSONパースエラー: ${err.message}`);
+        }
+      }
     }
 
-    const savedTheme = localStorage.getItem('x_archive_theme') || 'light';
-    applyViewerTheme(savedTheme);
-
-    // Toast Notification helper
-    function showToast(message) {
-      const existing = document.querySelector('.toast-notification');
-      if (existing) existing.remove();
-      const toast = document.createElement('div');
-      toast.className = 'toast-notification';
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 2800);
-    }
-
-    // Media URL Resolver (local zip blobs, local relative paths, or remote fallbacks)
     function resolveMediaUrl(pathOrUrl) {
       if (!pathOrUrl) return '';
-      if (archiveMediaMap.has(pathOrUrl)) return archiveMediaMap.get(pathOrUrl);
-      const filename = pathOrUrl.split(/[\\/]/).pop();
-      if (archiveMediaMap.has(filename)) return archiveMediaMap.get(filename);
+      if (cachedBlobs.has(pathOrUrl)) return cachedBlobs.get(pathOrUrl);
+      const clean = pathOrUrl.replace(/^.*?(media\/|profile_media\/)/, '$1');
+      if (cachedBlobs.has(clean)) return cachedBlobs.get(clean);
       return pathOrUrl;
     }
 
-    function getMimeFromPath(filePath) {
-      const ext = filePath.split('.').pop().toLowerCase();
-      if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-      if (ext === 'png') return 'image/png';
-      if (ext === 'webp') return 'image/webp';
-      if (ext === 'gif') return 'image/gif';
-      if (ext === 'mp4') return 'video/mp4';
-      return 'application/octet-stream';
-    }
-
-    // Direct Archive (.zip / .xarchpjzip) Decompressor
-    async function loadArchiveFile(file) {
-      const statusEl = document.getElementById('archiveLoadStatus');
-      const dropZoneText = document.getElementById('dropZoneText');
-      if (statusEl) {
-        statusEl.style.display = 'block';
-        statusEl.textContent = 'アーカイブを展開中...';
-      }
-      if (dropZoneText) {
-        dropZoneText.textContent = `${file.name} を展開中...`;
-      }
-
-      try {
-        if (typeof JSZip === 'undefined') {
-          throw new Error('JSZip ライブラリが読み込まれていません');
-        }
-
-        const zip = await JSZip.loadAsync(file);
-        if (statusEl) statusEl.textContent = 'ファイルインデックスを作成中...';
-
-        // Clean up previous blob URLs
-        archiveMediaMap.forEach(url => URL.revokeObjectURL(url));
-        archiveMediaMap.clear();
-
-        let tweetsJsonEntry = null;
-        let profileJsonEntry = null;
-        const mediaPromises = [];
-
-        zip.forEach((relPath, zipEntry) => {
-          const lower = relPath.toLowerCase();
-          if (lower.endsWith('tweets.json') || lower === 'tweets.json') {
-            tweetsJsonEntry = zipEntry;
-          } else if (lower.endsWith('profile.json') || lower === 'profile.json') {
-            profileJsonEntry = zipEntry;
-          } else if (!zipEntry.dir && (lower.startsWith('media/') || lower.startsWith('profile_media/') || lower.includes('/media/'))) {
-            mediaPromises.push(async () => {
-              const blob = await zipEntry.async('blob');
-              const mime = getMimeFromPath(relPath);
-              const typedBlob = new Blob([blob], { type: mime });
-              const objUrl = URL.createObjectURL(typedBlob);
-              const filename = relPath.split('/').pop();
-              archiveMediaMap.set(relPath, objUrl);
-              archiveMediaMap.set(filename, objUrl);
-            });
-          }
-        });
-
-        if (!tweetsJsonEntry) {
-          throw new Error('アーカイブ内に tweets.json が見つかりませんでした');
-        }
-
-        const tweetsRaw = await tweetsJsonEntry.async('text');
-        allTweets = JSON.parse(tweetsRaw);
-
-        if (profileJsonEntry) {
-          const profRaw = await profileJsonEntry.async('text');
-          userProfile = JSON.parse(profRaw);
-        }
-
-        if (statusEl) statusEl.textContent = `メディアファイルを展開中 (${mediaPromises.length} 件)...`;
-        await Promise.all(mediaPromises.map(fn => fn()));
-
-        if (statusEl) {
-          statusEl.textContent = `読み込み完了 (${allTweets.length} 件のポスト)`;
-          setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
-        }
-        if (dropZoneText) {
-          dropZoneText.textContent = `${file.name} (${allTweets.length} 件)`;
-        }
-
-        showToast(`アーカイブ「${file.name}」を正常に読み込みました`);
-        renderAll();
-      } catch (err) {
-        console.error('Archive load error:', err);
-        alert(`アーカイブ読み込み失敗: ${err.message}`);
-        if (statusEl) statusEl.textContent = `エラー: ${err.message}`;
-        if (dropZoneText) dropZoneText.textContent = '.zip / .xarchpjzip / JSON を選択';
-      }
-    }
-
-    // Auto-load local files if available (when served inside extracted folder)
-    async function tryLoadLocalData() {
-      try {
-        const [pRes, tRes] = await Promise.all([
-          fetch('profile.json'),
-          fetch('tweets.json')
-        ]);
-        if (pRes.ok) userProfile = await pRes.json();
-        if (tRes.ok) allTweets = await tRes.json();
-        renderAll();
-      } catch (e) {
-        console.log('Local fetch not directly reachable; waiting for user action.');
-      }
-    }
-
-    // File picker listener (.json, .zip, .xarchpjzip)
-    const filePicker = document.getElementById('filePicker');
-    if (filePicker) {
-      filePicker.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const nameLower = file.name.toLowerCase();
-        if (nameLower.endsWith('.zip') || nameLower.endsWith('.xarchpjzip')) {
-          loadArchiveFile(file);
-        } else {
-          // JSON reader
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            try {
-              const data = JSON.parse(evt.target.result);
-              if (Array.isArray(data)) {
-                allTweets = data;
-              } else if (data.tweets) {
-                allTweets = data.tweets;
-                userProfile = data.profile || userProfile;
-              } else {
-                userProfile = data;
-              }
-              showToast(`JSON を読み込みました (${allTweets.length} 件)`);
-              renderAll();
-            } catch (err) {
-              alert('JSON パースエラー: ' + err.message);
-            }
-          };
-          reader.readAsText(file);
-        }
-      });
-    }
-
-    // Drag and Drop Zone
-    const dropZone = document.getElementById('dropZone');
-    if (dropZone) {
-      ['dragenter', 'dragover'].forEach(eventName => {
-        window.addEventListener(eventName, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          dropZone.classList.add('drag-over');
-        }, false);
-      });
-
-      ['dragleave', 'drop'].forEach(eventName => {
-        window.addEventListener(eventName, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          dropZone.classList.remove('drag-over');
-        }, false);
-      });
-
-      window.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files && files.length > 0) {
-          const file = files[0];
-          const nameLower = file.name.toLowerCase();
-          if (nameLower.endsWith('.zip') || nameLower.endsWith('.xarchpjzip')) {
-            loadArchiveFile(file);
-          } else if (nameLower.endsWith('.json')) {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-              try {
-                const data = JSON.parse(evt.target.result);
-                if (Array.isArray(data)) allTweets = data;
-                else if (data.tweets) {
-                  allTweets = data.tweets;
-                  userProfile = data.profile || userProfile;
-                } else userProfile = data;
-                showToast(`JSON を読み込みました (${allTweets.length} 件)`);
-                renderAll();
-              } catch (err) {
-                alert('JSON パースエラー: ' + err.message);
-              }
-            };
-            reader.readAsText(file);
-          }
-        }
-      });
-    }
-
-    // Filter Navigation
-    const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
-      item.addEventListener('click', () => {
-        navItems.forEach(i => i.classList.remove('active'));
-        item.classList.add('active');
-        currentFilterView = item.getAttribute('data-view');
-        renderTweets();
-      });
-    });
-
-    // Search & Checkboxes
+    // Search and Filter Listeners
     document.getElementById('searchInput').addEventListener('input', renderTweets);
     document.getElementById('checkOnlyMedia').addEventListener('change', renderTweets);
     document.getElementById('checkNoReplies').addEventListener('change', renderTweets);
     document.getElementById('checkNoReposts').addEventListener('change', renderTweets);
 
-    function renderAll() {
+    function renderAll(fileName, mediaCount) {
       renderProfile();
       renderTweets();
+
+      if (fileName) {
+        const infoPanel = document.getElementById('archiveInfoPanel');
+        infoPanel.style.display = 'block';
+        document.getElementById('infoFileName').textContent = fileName;
+        document.getElementById('infoTotalTweets').textContent = `${allTweets.length.toLocaleString()} 件`;
+        document.getElementById('infoMediaCount').textContent = `${mediaCount.toLocaleString()} 個`;
+      }
     }
 
     function renderProfile() {
-      if (!userProfile) return;
-      document.getElementById('topHeaderName').textContent = userProfile.name || userProfile.screen_name || 'X Archive';
-      document.getElementById('viewName').textContent = userProfile.name || '';
-      document.getElementById('viewHandle').textContent = `@${userProfile.screen_name || ''}`;
-      document.getElementById('viewBio').textContent = userProfile.description || '';
+      const hero = document.getElementById('profileHeroArea');
+      if (!userProfile && allTweets.length > 0) {
+        userProfile = allTweets[0].author || {};
+      }
+      if (!userProfile) {
+        hero.style.display = 'none';
+        return;
+      }
+      hero.style.display = 'flex';
 
       const bannerImg = document.getElementById('viewBannerImg');
       const bannerSrc = resolveMediaUrl('profile_media/banner.jpg') || userProfile.banner_url;
       if (bannerSrc) {
         bannerImg.src = bannerSrc;
-        document.querySelector('.profile-banner').style.display = 'block';
+        bannerImg.parentElement.style.display = 'block';
       } else {
-        document.querySelector('.profile-banner').style.display = 'none';
+        bannerImg.parentElement.style.display = 'none';
       }
+
+      document.getElementById('topHeaderName').textContent = userProfile.name || userProfile.screen_name || 'X Archive';
+      document.getElementById('viewName').textContent = userProfile.name || userProfile.screen_name || '';
+      document.getElementById('viewHandle').textContent = `@${userProfile.screen_name || ''}`;
+      document.getElementById('viewBio').textContent = userProfile.description || '';
 
       const avatarImg = document.getElementById('viewAvatarImg');
       const avatarSrc = resolveMediaUrl('profile_media/avatar.jpg') || userProfile.avatar_url;
@@ -887,6 +943,55 @@
 
       document.getElementById('viewFollowingCount').textContent = Number(userProfile.following || 0).toLocaleString();
       document.getElementById('viewFollowersCount').textContent = Number(userProfile.followers || 0).toLocaleString();
+
+      const metaGrid = document.getElementById('viewMetaGrid');
+      metaGrid.innerHTML = '';
+      if (userProfile.location) {
+        metaGrid.innerHTML += `<div class="p-meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${escapeHtml(userProfile.location)}</div>`;
+      }
+      if (userProfile.joined) {
+        metaGrid.innerHTML += `<div class="p-meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${escapeHtml(userProfile.joined)} から利用</div>`;
+      }
+    }
+
+    // Robust Repost & Tweet Analysis
+    function analyzeTweet(t) {
+      let isRepost = false;
+      let reposterName = '';
+      let author = t.author || userProfile || {};
+      let text = t.text || '';
+
+      if (t.reposted_by) {
+        isRepost = true;
+        reposterName = t.reposted_by.name || t.reposted_by.screen_name;
+      } else if (t.retweeted_status) {
+        isRepost = true;
+        reposterName = userProfile?.name || userProfile?.screen_name || 'リポスト';
+        author = t.retweeted_status.author || author;
+        text = t.retweeted_status.text || text;
+      } else if (typeof text === 'string' && text.startsWith('RT @')) {
+        isRepost = true;
+        reposterName = userProfile?.name || userProfile?.screen_name || 'リポスト';
+        const match = text.match(/^RT @([a-zA-Z0-9_]+):\s*([\s\S]*)$/);
+        if (match) {
+          author = {
+            name: match[1],
+            screen_name: match[1],
+            avatar_url: t.author?.screen_name === match[1] ? t.author?.avatar_url : null
+          };
+          text = match[2];
+        }
+      } else if (t.is_retweet) {
+        isRepost = true;
+        reposterName = userProfile?.name || userProfile?.screen_name || 'リポスト';
+      } else if (t.author?.screen_name && userProfile?.screen_name &&
+                 t.author.screen_name.toLowerCase() !== userProfile.screen_name.toLowerCase() &&
+                 !t.replying_to) {
+        isRepost = true;
+        reposterName = userProfile.name || userProfile.screen_name;
+      }
+
+      return { isRepost, reposterName, author, text };
     }
 
     function renderTweets() {
@@ -897,8 +1002,10 @@
       const noReposts = document.getElementById('checkNoReposts').checked;
 
       let filtered = allTweets.filter(t => {
+        const info = analyzeTweet(t);
+
         if (noReplies && (t.replying_to || t.replying_to_status)) return false;
-        if (noReposts && t.reposted_by) return false;
+        if (noReposts && info.isRepost) return false;
 
         const hasPhotos = t.media?.photos?.length > 0;
         const hasVideos = t.media?.videos?.length > 0;
@@ -908,8 +1015,8 @@
         if (currentFilterView === 'replies' && !t.replying_to) return false;
 
         if (query) {
-          const matchText = (t.text || '').toLowerCase().includes(query);
-          const matchAuthor = (t.author?.name || '').toLowerCase().includes(query) || (t.author?.screen_name || '').toLowerCase().includes(query);
+          const matchText = (info.text || '').toLowerCase().includes(query);
+          const matchAuthor = (info.author?.name || '').toLowerCase().includes(query) || (info.author?.screen_name || '').toLowerCase().includes(query);
           if (!matchText && !matchAuthor) return false;
         }
 
@@ -928,27 +1035,36 @@
         const item = document.createElement('article');
         item.className = 'tweet-item';
 
-        const author = t.author || userProfile || {};
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }) : '';
+        const info = analyzeTweet(t);
+        const author = info.author;
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
-        // Subheader (Repost / Reply)
-        let subheaderHtml = '';
-        if (t.reposted_by) {
-          subheaderHtml = `
-            <div class="tweet-sub-header">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-              <span>${escapeHtml(t.reposted_by.name || t.reposted_by.screen_name)} さんがリポスト</span>
-            </div>
-          `;
-        } else if (t.replying_to) {
-          subheaderHtml = `
-            <div class="tweet-sub-header">
-              <span>返信先: @${escapeHtml(t.replying_to)}</span>
+        // 1. Repost Context Row (Green Retweet Icon Indented Above Avatar)
+        let contextRowHtml = '';
+        if (info.isRepost) {
+          contextRowHtml = `
+            <div class="tweet-context-row">
+              <div class="tweet-context-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.895 2 2 2H16v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H8V4h8.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.895-2-2-2z"/>
+                </svg>
+              </div>
+              <span class="tweet-context-text">${escapeHtml(info.reposterName)} さんがリポスト</span>
             </div>
           `;
         }
 
-        // Media Gallery Layout
+        // 2. Reply Subheader
+        let replyRowHtml = '';
+        if (t.replying_to) {
+          replyRowHtml = `
+            <div class="tweet-reply-row">
+              返信先: <span>@${escapeHtml(t.replying_to)}</span>
+            </div>
+          `;
+        }
+
+        // 3. Media Gallery
         let mediaHtml = '';
         const photos = t.media?.photos || [];
         const videos = t.media?.videos || [];
@@ -971,55 +1087,57 @@
           mediaHtml += `</div>`;
         }
 
-        // Quote Tweet Embed
+        // 4. Quote Box
         let quoteHtml = '';
         if (t.quote) {
+          const qAuthor = t.quote.author || {};
+          const qAvatar = resolveMediaUrl(qAuthor.avatar_url) || '';
           quoteHtml = `
             <div class="quote-box">
-              <div class="tweet-author-line">
-                <span class="t-author-name">${escapeHtml(t.quote.author?.name || '')}</span>
-                <span class="t-author-handle">@${escapeHtml(t.quote.author?.screen_name || '')}</span>
+              <div class="quote-header">
+                ${qAvatar ? `<img src="${escapeHtml(qAvatar)}" class="quote-avatar" alt="Avatar">` : ''}
+                <span class="quote-author-name">${escapeHtml(qAuthor.name || '')}</span>
+                <span class="quote-author-handle">@${escapeHtml(qAuthor.screen_name || '')}</span>
               </div>
-              <div class="tweet-text" style="font-size: 13px;">${escapeHtml(t.quote.text || '')}</div>
+              <div class="quote-text">${escapeHtml(t.quote.text || '')}</div>
             </div>
           `;
         }
 
-        const avatarSrc = resolveMediaUrl('profile_media/avatar.jpg') || author.avatar_url || '';
+        const avatarSrc = resolveMediaUrl(author.avatar_url) || resolveMediaUrl('profile_media/avatar.jpg') || '';
 
         item.innerHTML = `
-          <img src="${escapeHtml(avatarSrc)}" class="tweet-left-avatar" alt="Avatar">
-          <div class="tweet-content">
-            ${subheaderHtml}
-            <div class="tweet-author-line">
-              <span class="t-author-name">${escapeHtml(author.name || author.screen_name || '')}</span>
-              <span class="t-author-handle">@${escapeHtml(author.screen_name || '')}</span>
-              <span class="t-dot">·</span>
-              <span class="t-date">${escapeHtml(dateStr)}</span>
-            </div>
-            <div class="tweet-text">${escapeHtml(t.text || '')}</div>
-            ${mediaHtml}
-            ${quoteHtml}
-            <div class="tweet-actions-bar">
-              <div class="action-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                <span>${Number(t.replies || 0).toLocaleString()}</span>
+          ${contextRowHtml}
+          <div class="tweet-main-body">
+            <img src="${escapeHtml(avatarSrc)}" class="tweet-avatar" alt="Avatar">
+            <div class="tweet-content">
+              <div class="tweet-author-line">
+                <span class="t-author-name">${escapeHtml(author.name || author.screen_name || '')}</span>
+                <span class="t-author-handle">@${escapeHtml(author.screen_name || '')}</span>
+                <span class="t-dot">·</span>
+                <span class="t-date">${escapeHtml(dateStr)}</span>
               </div>
-              <div class="action-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                <span>${Number(t.retweets || t.reposts || 0).toLocaleString()}</span>
-              </div>
-              <div class="action-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                <span>${Number(t.likes || 0).toLocaleString()}</span>
-              </div>
-              <div class="action-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
-                <span>${Number(t.bookmarks || 0).toLocaleString()}</span>
-              </div>
-              <div class="action-badge export-img-btn" title="ツイートを画像として出力 (PNG)" onclick="event.stopPropagation(); exportTweetCard('${t.id}')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--accent);"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                <span style="color: var(--accent); font-weight: 600;">画像出力</span>
+              ${replyRowHtml}
+              <div class="tweet-text">${escapeHtml(info.text)}</div>
+              ${mediaHtml}
+              ${quoteHtml}
+              <div class="tweet-actions-bar">
+                <div class="action-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                  <span>${Number(t.replies || 0).toLocaleString()}</span>
+                </div>
+                <div class="action-badge repost">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  <span>${Number(t.retweets || t.reposts || 0).toLocaleString()}</span>
+                </div>
+                <div class="action-badge like">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                  <span>${Number(t.likes || 0).toLocaleString()}</span>
+                </div>
+                <div class="action-badge export" title="ポストを高解像度画像 (PNG) として出力" onclick="event.stopPropagation(); exportTweetCard('${t.id}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  <span style="font-weight: 600;">画像出力</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1029,261 +1147,98 @@
       });
     }
 
-    // High-Resolution Pixel-Perfect Canvas Tweet Card Image Rasterizer
+    // High-Resolution 2.0x Retina Tweet Image Exporter
     async function exportTweetCard(tweetId) {
       const tweet = allTweets.find(x => String(x.id) === String(tweetId));
-      if (!tweet) {
-        alert('指定されたポストが見つかりませんでした');
-        return;
-      }
+      if (!tweet) return;
 
       showToast('ツイート画像を生成中...');
+      const info = analyzeTweet(tweet);
+      const author = info.author;
 
-      const author = tweet.author || userProfile || {};
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+      const scale = 2.0;
+      const width = 640;
+      const padding = 28;
+      const contentWidth = width - padding * 2;
 
-      const isDark = currentTheme === 'dark';
-      const isDim = currentTheme === 'dim';
-
-      const bgColor = isDark ? '#000000' : isDim ? '#15202B' : '#FFFFFF';
-      const textColor = isDark ? '#E7E9EA' : isDim ? '#F7F9F9' : '#0F1419';
-      const textSubColor = isDark ? '#71767B' : isDim ? '#8B98A5' : '#536471';
-      const borderColor = isDark ? '#2F3336' : isDim ? '#38444D' : '#CFD9DE';
-
-      const canvasWidth = 1000;
-      const padding = 44;
-      const contentWidth = canvasWidth - padding * 2;
-
-      // Create offscreen canvas for measure
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // Word wrapping helper
-      function getLines(text, maxWidth, font) {
-        ctx.font = font;
-        const paragraphs = String(text || '').split('\n');
-        const lines = [];
-
-        paragraphs.forEach(para => {
-          if (!para) {
-            lines.push('');
-            return;
-          }
-          let currentLine = '';
-          for (let i = 0; i < para.length; i++) {
-            const char = para[i];
-            const testLine = currentLine + char;
-            if (ctx.measureText(testLine).width > maxWidth && currentLine.length > 0) {
-              lines.push(currentLine);
-              currentLine = char;
-            } else {
-              currentLine = testLine;
-            }
-          }
-          if (currentLine) lines.push(currentLine);
-        });
-
-        return lines;
-      }
-
-      const textLines = getLines(tweet.text || '', contentWidth, '24px Inter, sans-serif');
-      const lineHeight = 36;
-      const textHeight = textLines.length * lineHeight;
-
-      // Check if photo exists
-      const photos = tweet.media?.photos || [];
-      const hasPhoto = photos.length > 0;
-      const photoHeight = hasPhoto ? 440 : 0;
-
-      // Calculate total height
-      // Header: ~70px, Text: textHeight, Photo: photoHeight + 20, Stats: 40px, Footer: 30px, Padding: ~88px
-      const totalHeight = padding * 2 + 70 + textHeight + (hasPhoto ? photoHeight + 24 : 0) + 60 + 34;
-
-      // Set canvas size (2x retina scale)
-      const scale = 2;
-      canvas.width = canvasWidth * scale;
-      canvas.height = totalHeight * scale;
-      ctx.scale(scale, scale);
-
-      // 1. Draw Card Background
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, canvasWidth, totalHeight);
-
-      // Subtle Outer Border
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0, 0, canvasWidth, totalHeight);
-
-      let curY = padding;
-
-      // 2. Draw Avatar
-      const avatarSize = 56;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(padding + avatarSize / 2, curY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-
-      const avatarSrc = resolveMediaUrl('profile_media/avatar.jpg') || author.avatar_url;
-      let avatarLoaded = false;
-      if (avatarSrc) {
-        try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.src = avatarSrc;
-          if (img.complete && img.naturalWidth > 0) {
-            ctx.drawImage(img, padding, curY, avatarSize, avatarSize);
-            avatarLoaded = true;
+      ctx.font = '16px Inter, sans-serif';
+      const lines = [];
+      const rawLines = (info.text || '').split('\n');
+      rawLines.forEach(l => {
+        let cur = '';
+        for (let i = 0; i < l.length; i++) {
+          if (ctx.measureText(cur + l[i]).width > contentWidth) {
+            lines.push(cur);
+            cur = l[i];
           } else {
-            await new Promise((res) => {
-              img.onload = () => { ctx.drawImage(img, padding, curY, avatarSize, avatarSize); avatarLoaded = true; res(); };
-              img.onerror = () => res();
-              setTimeout(res, 350);
-            });
+            cur += l[i];
           }
-        } catch (e) {}
-      }
-
-      if (!avatarLoaded) {
-        ctx.fillStyle = '#1D9BF0';
-        ctx.fillRect(padding, curY, avatarSize, avatarSize);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 24px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText((author.name || 'X')[0].toUpperCase(), padding + avatarSize / 2, curY + avatarSize / 2);
-      }
-      ctx.restore();
-
-      // 3. Draw Author Names & Handle
-      const textStartX = padding + avatarSize + 16;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-
-      ctx.fillStyle = textColor;
-      ctx.font = 'bold 22px Inter, sans-serif';
-      const name = author.name || author.screen_name || 'User';
-      ctx.fillText(name, textStartX, curY + 4);
-
-      ctx.fillStyle = textSubColor;
-      ctx.font = '17px Fira Code, monospace';
-      const handle = `@${author.screen_name || ''}`;
-      ctx.fillText(handle, textStartX, curY + 32);
-
-      // X Logo in top right
-      ctx.fillStyle = textColor;
-      ctx.font = 'bold 22px Inter, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText('𝕏', canvasWidth - padding, curY + 8);
-
-      curY += avatarSize + 22;
-
-      // 4. Draw Tweet Text
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = textColor;
-      ctx.font = '24px Inter, sans-serif';
-
-      textLines.forEach(line => {
-        ctx.fillText(line, padding, curY);
-        curY += lineHeight;
+        }
+        lines.push(cur);
       });
 
-      curY += 12;
+      const textHeight = lines.length * 24;
+      const height = padding * 2 + 54 + textHeight + 60;
 
-      // 5. Draw Media Photo if available
-      if (hasPhoto) {
-        const photoUrl = resolveMediaUrl(`media/${tweet.id}_photo_1.jpg`) || photos[0].url;
-        if (photoUrl) {
-          try {
-            const pImg = new Image();
-            pImg.crossOrigin = 'anonymous';
-            pImg.src = photoUrl;
-            if (!pImg.complete) {
-              await new Promise((res) => {
-                pImg.onload = res;
-                pImg.onerror = res;
-                setTimeout(res, 500);
-              });
-            }
-            if (pImg.complete && pImg.naturalWidth > 0) {
-              ctx.save();
-              // Rounded rectangle clip
-              const r = 16;
-              const pw = contentWidth;
-              const ph = photoHeight;
-              ctx.beginPath();
-              ctx.moveTo(padding + r, curY);
-              ctx.lineTo(padding + pw - r, curY);
-              ctx.quadraticCurveTo(padding + pw, curY, padding + pw, curY + r);
-              ctx.lineTo(padding + pw, curY + ph - r);
-              ctx.quadraticCurveTo(padding + pw, curY + ph, padding + pw - r, curY + ph);
-              ctx.lineTo(padding + r, curY + ph);
-              ctx.quadraticCurveTo(padding, curY + ph, padding, curY + ph - r);
-              ctx.lineTo(padding, curY + r);
-              ctx.quadraticCurveTo(padding, curY, padding + r, curY);
-              ctx.closePath();
-              ctx.clip();
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      ctx.scale(scale, scale);
 
-              // Draw image with object-fit cover
-              const imgAspect = pImg.naturalWidth / pImg.naturalHeight;
-              const frameAspect = pw / ph;
-              let sWidth, sHeight, sx, sy;
-              if (imgAspect > frameAspect) {
-                sHeight = pImg.naturalHeight;
-                sWidth = sHeight * frameAspect;
-                sx = (pImg.naturalWidth - sWidth) / 2;
-                sy = 0;
-              } else {
-                sWidth = pImg.naturalWidth;
-                sHeight = sWidth / frameAspect;
-                sx = 0;
-                sy = (pImg.naturalHeight - sHeight) / 2;
-              }
-              ctx.drawImage(pImg, sx, sy, sWidth, sHeight, padding, curY, pw, ph);
-              ctx.restore();
+      // Background
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const bgColor = isDark ? '#000000' : '#FFFFFF';
+      const textColor = isDark ? '#E7E9EA' : '#0F1419';
+      const subColor = isDark ? '#71767B' : '#536471';
+      const borderColor = isDark ? '#2F3336' : '#EFF3F4';
 
-              // Border around photo
-              ctx.strokeStyle = borderColor;
-              ctx.lineWidth = 1;
-              ctx.stroke();
-            }
-          } catch (e) {}
-        }
-        curY += photoHeight + 20;
-      }
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, width, height);
 
-      // 6. Draw Separator Line
+      // Border
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padding, curY);
-      ctx.lineTo(canvasWidth - padding, curY);
-      ctx.stroke();
+      ctx.strokeRect(0, 0, width, height);
+
+      // Header
+      let curY = padding;
+      ctx.fillStyle = textColor;
+      ctx.font = 'bold 16px Inter, sans-serif';
+      ctx.fillText(author.name || author.screen_name || '', padding, curY + 18);
+
+      ctx.fillStyle = subColor;
+      ctx.font = '14px Inter, sans-serif';
+      ctx.fillText(`@${author.screen_name || ''}`, padding, curY + 38);
+
+      curY += 54;
+
+      // Tweet Text
+      ctx.fillStyle = textColor;
+      ctx.font = '16px Inter, sans-serif';
+      lines.forEach(line => {
+        ctx.fillText(line, padding, curY + 16);
+        curY += 24;
+      });
 
       curY += 16;
+      ctx.strokeStyle = borderColor;
+      ctx.beginPath();
+      ctx.moveTo(padding, curY);
+      ctx.lineTo(width - padding, curY);
+      ctx.stroke();
 
-      // 7. Draw Metrics Row
-      const dateStr = tweet.created_at ? new Date(tweet.created_at).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-      ctx.fillStyle = textSubColor;
-      ctx.font = '16px Inter, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(`${dateStr} · ${Number(tweet.retweets || tweet.reposts || 0).toLocaleString()} リポスト · ${Number(tweet.likes || 0).toLocaleString()} いいね · ${Number(tweet.bookmarks || 0).toLocaleString()} ブックマーク`, padding, curY);
+      curY += 20;
 
-      curY += 28;
+      // Date & Stats
+      const dateStr = tweet.created_at ? new Date(tweet.created_at).toLocaleString('ja-JP') : '';
+      ctx.fillStyle = subColor;
+      ctx.font = '13px Inter, sans-serif';
+      ctx.fillText(`${dateStr} · FxTwitter Archive Studio by Hikaproj`, padding, curY);
 
-      // 8. Watermark Footer
-      ctx.fillStyle = textSubColor;
-      ctx.font = '13px Fira Code, monospace';
-      ctx.textAlign = 'right';
-      ctx.fillText('FxTwitter Archive Studio · Hikaproj', canvasWidth - padding, curY);
-
-      // 9. Trigger Download
       canvas.toBlob((blob) => {
-        if (!blob) {
-          alert('画像変換に失敗しました');
-          return;
-        }
+        if (!blob) return;
         const dlUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = dlUrl;
@@ -1305,8 +1260,6 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
-
-    tryLoadLocalData();
   </script>
 </body>
 </html>

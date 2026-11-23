@@ -42,12 +42,14 @@ docker compose up -d
 
 ## 主な機能と特徴
 
-1. **完全ネイティブ Rust によるデスクトップ GUI & 高速 CLI**
-   - デスクトップアプリ (`fxtweet-studio`) は Tauri v2 と Rust ネイティブエンジンで構築。ローカル Web サーバーの立ち上げや Web 埋め込みに依存せず、Tauri IPC 経由で直接ネイティブ処理を実行します。
+1. **完全ネイティブ Rust によるデスクトップ GUI、独立ビューアー & 高速 CLI**
+   - デスクトップアプリ (`fxtweet-studio`) および独立ビューアー (`fxtweet-viewer`) は Tauri v2 と Rust ネイティブエンジンで構築。ローカル Web サーバーの立ち上げや Web 埋め込みに依存せず、Tauri IPC 経由で直接ネイティブ処理を実行します。
    - CLI ツール (`fxtweet-cli`) は依存関係ゼロの単一バイナリとしてコンパイルされ、軽量かつ高速に動作します。
-2. **統合オフライン X (Twitter) ビューアー搭載**
-   - デスクトップアプリ内に「一括取得・常時監視」と「アーカイブ閲覧 (Viewer)」のモード切り替えタブを搭載。
-   - バックアップ出力アーカイブ（`.zip` および独自形式 `.xarchpjzip`）を画面上にドラッグ＆ドロップするだけで、Rust ネイティブまたはブラウザ内メモリ上で即時展開し、オフラインでタイムラインやメディアを快適に閲覧可能。
+2. **本家完全再現の独立オフライン X (Twitter) ビューアー (`fxtweet-viewer`)**
+   - 単体で独立起動可能なネイティブビューアーアプリ (`fxtweet-viewer`) を提供。
+   - **本家 X ライクなデザイン**: リポスト (RT) は本家同様にツイート上部に緑色リポストアイコン (`#00BA7C`) と「〇〇さんがリポスト」ヘッダーを表示し、元ツイートの著者名・アバター・本文・メディアを美しく配置。
+   - 引用ツイートは角丸カード枠で埋め込み表示。
+   - バックアップ出力アーカイブ（`.zip` および独自形式 `.xarchpjzip`）をドラッグ＆ドロップするだけで、Rust ネイティブの高速 ZIP 解凍エンジンまたはブラウザメモリ上で即時展開し、完全オフラインで閲覧可能。
 3. **高解像度ツイート画像 (PNG) 出力機能**
    - ビューアー内の各ポストカードに「画像出力」機能を装備。Retina 2x の高精度 Canvas レンダリングエンジンにより、本家ツイート風のカード画像をワンクリックで PNG 保存可能。
 4. **独自拡張子 `.xarchpjzip` および多彩なアーカイブ形式に対応**
@@ -84,7 +86,8 @@ docker compose up -d
 
 | 形態 | 実装言語 | 概要 | 依存関係 |
 | :--- | :--- | :--- | :--- |
-| **デスクトップ GUI (`fxtweet-studio`)** | **Rust + Tauri v2** | 完全ネイティブ GUI アプリケーション。一括取得・常時監視・Xビューアーが統合されており、ローカル Web サーバー不要で単体動作します。 | なし (スタンドアロン) |
+| **デスクトップ GUI (`fxtweet-studio`)** | **Rust + Tauri v2** | 完全ネイティブ GUI アプリケーション。一括取得・常時監視を実行し、独立ビューアーのシームレス起動に対応。ローカル Web サーバー不要で単体動作します。 | なし (スタンドアロン) |
+| **独立 X ビューアー (`fxtweet-viewer`)** | **Rust + Tauri v2** | 本家 X 完全準拠のオフラインアーカイブ閲覧ソフト。ZIP/.xarchpjzip のネイティブ解凍、高解像度 PNG カード出力に対応。 | なし (スタンドアロン) |
 | **ネイティブ CLI (`fxtweet-cli`)** | **Rust** | 高速コマンドラインツール。パイプライン処理、定期実行 (cron)、ヘッドレスサーバー監視に最適です。 | なし (単一バイナリ) |
 | **Docker パッケージ** | **Container** | Node.js Web 版を完全パッケージ化した Docker イメージ。解凍して `docker compose up -d` だけで即起動します。 | Docker |
 | **Node.js 版 (`server.js` / `cli.js`)** | **Node.js** | クロスプラットフォームで手軽に動作する Web UI & CLI。 | Node.js >= 18 |
@@ -95,9 +98,9 @@ docker compose up -d
 
 GitHub Releases から各プラットフォーム向けのパッケージをダウンロードいただけます：
 
-1. `fxtweet-studio-windows-x86_64-vX.X.X.zip` (Windows 向け Rust GUI `fxtweet-studio.exe` & CLI `fxtweet-cli.exe` 同梱)
-2. `fxtweet-studio-macos-universal-vX.X.X.tar.gz` (macOS 向け Universal GUI & CLI 同梱 - Intel & Apple Silicon 双方でネイティブ動作)
-3. `fxtweet-studio-linux-x86_64-vX.X.X.tar.gz` (Linux 向け GUI & CLI 同梱)
+1. `fxtweet-studio-windows-x86_64-vX.X.X.zip` (Windows 向け Rust GUI `fxtweet-studio.exe`, 独立ビューアー `fxtweet-viewer.exe`, CLI `fxtweet-cli.exe` 同梱)
+2. `fxtweet-studio-macos-universal-vX.X.X.tar.gz` (macOS 向け Universal GUI, 独立ビューアー, CLI 同梱 - Intel & Apple Silicon 双方でネイティブ動作)
+3. `fxtweet-studio-linux-x86_64-vX.X.X.tar.gz` (Linux 向け GUI, 独立ビューアー, CLI 同梱)
 4. `fxtweet-studio-arch-x86_64-vX.X.X.tar.gz` (Arch Linux 向け PKGBUILD 付属パッケージ)
 5. `fxtweet-studio-docker-vX.X.X.zip` (Docker 実行パッケージ一式 - 解凍して `docker compose up -d` で起動)
 6. `fxtweet-studio-nodejs-vX.X.X.zip` / `.tar.gz` (Node.js 版ポータブル一式)
@@ -109,12 +112,12 @@ GitHub Releases から各プラットフォーム向けのパッケージをダ�
 
 ## クイックスタート
 
-### 1. デスクトップ GUI アプリケーション (`fxtweet-studio`)
+### 1. デスクトップ GUI アプリケーション (`fxtweet-studio` / `fxtweet-viewer`)
 1. リリースからお使いの OS に合わせたアーカイブをダウンロードして解凍します。
 2. `fxtweet-studio` (Windows では `fxtweet-studio.exe`) を起動します。
 3. 取得したいアカウント（例: `@elonmusk`）を入力し、「プロフィール確認」を押します。
 4. 画質や取得件数、フォーマット（`.xarchpjzip` や `.zip`）を選択し、「取得開始」をクリックします。
-5. 取得完了後、「ビューアーで開く」をクリックするか、上部タブの「アーカイブ閲覧 (Viewer)」に切り替えてアーカイブをドロップすれば、オフラインで即座に閲覧できます。
+5. 取得完了後、ヘッダーの「独立Xビューアーを起動」ボタンを押すか、`fxtweet-viewer` を直接起動してアーカイブをドロップすれば、本家 X と同一のデザインでオフライン閲覧できます。
 
 ### 2. ネイティブ CLI (`fxtweet-cli`)
 ```bash
