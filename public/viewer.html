@@ -654,8 +654,79 @@
     .toast.show { opacity: 1; }
 
     /* ==========================================================================
-       RESPONSIVE DESIGN (Desktop, Tablet, Mobile Phone)
+       RESPONSIVE DESIGN (Desktop, Foldable Smartphone, Tablet, Mobile Phone)
        ========================================================================== */
+
+    /* Foldable Smartphone Unfolded & Dual-Screen Spanning (~680px - 1080px) */
+    @media (horizontal-viewport-segments: 2), (min-width: 680px) and (max-width: 1080px) and (min-aspect-ratio: 4/5) {
+      .x-app {
+        flex-direction: row !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
+      }
+      .x-sidebar-left {
+        width: 72px !important;
+        padding: 12px 8px !important;
+        align-items: center !important;
+        display: flex !important;
+        position: sticky !important;
+        top: 0 !important;
+        height: 100vh !important;
+        border-right: 1px solid var(--border) !important;
+        border-top: none !important;
+        z-index: 50 !important;
+      }
+      .x-sidebar-left .x-logo-badge,
+      .x-sidebar-left .nav-item span,
+      .x-sidebar-left .theme-picker .theme-label,
+      .x-sidebar-left .x-credits-text {
+        display: none !important;
+      }
+      .x-sidebar-left > div:first-child {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        align-items: center !important;
+      }
+      .x-sidebar-left > div:last-child {
+        display: block !important;
+      }
+      .x-logo-wrap {
+        display: inline-flex !important;
+      }
+      .nav-list {
+        margin-top: 16px !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        align-items: center !important;
+        gap: 6px !important;
+      }
+      .nav-item {
+        justify-content: center !important;
+        padding: 10px !important;
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 9999px !important;
+      }
+      .x-feed-column {
+        flex: 1 1 500px !important;
+        width: auto !important;
+        max-width: 600px !important;
+        border-right: 1px solid var(--border) !important;
+      }
+      .x-sidebar-right {
+        display: flex !important;
+        flex: 1 1 280px !important;
+        min-width: 260px !important;
+        max-width: 360px !important;
+        padding: 12px 16px !important;
+        position: sticky !important;
+        top: 0 !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+      }
+    }
+
     @media (max-width: 1024px) {
       .x-sidebar-right {
         display: none;

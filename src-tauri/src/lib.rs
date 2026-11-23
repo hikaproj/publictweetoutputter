@@ -1,6 +1,7 @@
 pub mod fxtwitter;
 pub mod engine;
 pub mod commands;
+pub mod live_activity;
 
 use tokio::sync::Mutex;
 use std::sync::Arc;

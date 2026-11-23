@@ -33,6 +33,12 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+
+  /* Safe Area Insets for Mobile Notches, Dynamic Island & Fold Hinge */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 [data-theme="dark"] {
@@ -1431,3 +1437,102 @@ body {
   width: 14px;
   height: 14px;
 }
+
+/* ==========================================================================
+   Mobile & Foldable Smartphone Adaptive Layout (Hikaproj Precision Craft)
+   Supports Galaxy Z Fold, Pixel Fold, Surface Duo, Tablets & Compact Phones
+   ========================================================================== */
+
+/* 1. Header Safe Area Insets for Mobile Notches & Dynamic Island */
+.navbar {
+  padding-top: var(--safe-top);
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+  height: calc(48px + var(--safe-top));
+}
+
+.main-container {
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+}
+
+.app-footer {
+  padding-bottom: max(12px, var(--safe-bottom));
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
+}
+
+/* 2. Foldable Dual-Screen Spanning (Hinge detection via Viewport Segments API) */
+@media (horizontal-viewport-segments: 2) {
+  .main-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: env(viewport-segment-width 0 0, 1.5rem);
+  }
+  .target-strip-card {
+    grid-column: 1;
+  }
+  .telemetry-strip {
+    grid-column: 2;
+  }
+  .workspace-card {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 3. Unfolded Foldable Screen & Large Tablets (~600px - 1080px wide with near-square aspect ratio) */
+@media (min-width: 600px) and (max-width: 1080px) and (min-aspect-ratio: 4/5) {
+  .target-strip-card, .telemetry-strip {
+    width: 100%;
+  }
+  .metrics-row {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .config-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 4. Folded Phone Cover Screen & Compact Mobile (<600px) */
+@media (max-width: 600px) {
+  .navbar {
+    padding: 0 0.75rem;
+    height: calc(44px + var(--safe-top));
+  }
+  .brand-title {
+    font-size: 12px;
+  }
+  .target-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .actions-group {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .actions-group .btn {
+    width: 100%;
+    min-height: 40px; /* Touch target accessibility */
+  }
+  .target-sub-row {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .metric-number {
+    font-size: 1.1rem;
+  }
+  .tab-nav {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-button {
+    flex-shrink: 0;
+  }
+}
+

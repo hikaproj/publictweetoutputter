@@ -13,8 +13,8 @@
         "title": "FxTwitter Archive Studio - by Hikaproj",
         "width": 1280,
         "height": 820,
-        "minWidth": 900,
-        "minHeight": 600,
+        "minWidth": 360,
+        "minHeight": 540,
         "resizable": true,
         "fullscreen": false
       }
@@ -54,6 +54,19 @@
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.15"
+    },
+    "iOS": {
+      "minimumSystemVersion": "16.1",
+      "frameworks": [
+        "ActivityKit",
+        "WidgetKit",
+        "SwiftUI"
+      ]
+    },
+    "android": {
+      "minSdkVersion": 24,
+      "targetSdkVersion": 34,
+      "compileSdkVersion": 34
     }
   }
 }

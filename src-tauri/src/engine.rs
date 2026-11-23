@@ -3,7 +3,7 @@ use std::fs::{self, File};
 use std::io::{Write, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, Mutex};
@@ -11,6 +11,7 @@ use tokio::time::sleep;
 use futures_util::stream::{self, StreamExt};
 
 use crate::fxtwitter::{FxClient, UserProfile};
+use crate::live_activity::{self, LiveActivityUpdate};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScrapeConfig {
@@ -153,18 +154,37 @@ impl ScrapeEngine {
         *lock = true;
     }
 
+    async fn notify_live_activity(&self, status: &str, progress: f64, is_locked: bool) {
+        let m = self.metrics.lock().await;
+        let update = LiveActivityUpdate {
+            handle: self.config.screen_name.clone(),
+            tweets_count: m.tweets_matching,
+            media_count: m.media_downloaded,
+            total_bytes: m.total_bytes,
+            speed_text: format!("{:.1} tw/s", m.speed_tweets_per_sec),
+            status_text: status.to_string(),
+            progress_pct: progress,
+            is_locked,
+        };
+        live_activity::update_activity(&update);
+    }
+
     pub async fn run(&self) -> Result<PathBuf, String> {
         fs::create_dir_all(&self.output_dir).map_err(|e| e.to_string())?;
         fs::create_dir_all(self.output_dir.join("media")).map_err(|e| e.to_string())?;
         fs::create_dir_all(self.output_dir.join("profile_media")).map_err(|e| e.to_string())?;
 
         self.log(&format!("Starting native backup for @{} (by Hikaproj)", self.config.screen_name), "INFO");
+        live_activity::start_activity(&self.config.screen_name);
 
-        // 1. Initial Profile
-        let profile = match self.client.get_profile(&self.config.screen_name).await {
+        let start_time = Instant::now();
+
+        // 1. Initial Profile Retrieval
+        let mut profile = match self.client.get_profile(&self.config.screen_name).await {
             Ok(p) => p,
             Err(e) => {
                 self.log(&format!("Failed to retrieve profile: {}", e), "ERROR");
+                live_activity::end_activity("Profile retrieval failed");
                 return Err(e);
             }
         };
@@ -172,9 +192,11 @@ impl ScrapeEngine {
         if profile.r#protected {
             if !self.config.start_on_locked {
                 self.log("Account is private and start_on_locked is disabled.", "WARN");
+                live_activity::end_activity("Account is private");
                 return Err("Account is locked".to_string());
             }
             self.log("Account is currently locked. Entering unlock-waiting loop...", "WARN");
+            self.notify_live_activity("Waiting for account unlock...", 0.0, true).await;
             self.wait_for_unlock().await?;
         }
 
@@ -197,6 +219,8 @@ impl ScrapeEngine {
 
         // 2. Fetch Timeline
         self.log("Collecting timeline posts via FxTwitter API...", "INFO");
+        self.notify_live_activity("Collecting posts...", 5.0, false).await;
+
         let mut collected_tweets: Vec<serde_json::Value> = Vec::new();
         let mut seen_ids: HashSet<String> = HashSet::new();
         let mut cursor: Option<String> = None;
@@ -216,6 +240,22 @@ impl ScrapeEngine {
                 Ok(r) => r,
                 Err(e) => {
                     self.log(&format!("Statuses request notice: {}", e), "WARN");
+                    // Check if locked
+                    if let Ok(p) = self.client.get_profile(&self.config.screen_name).await {
+                        if p.r#protected {
+                            if self.config.retry_on_locked {
+                                self.log("Account became locked during batch retrieval. Waiting for unlock...", "WARN");
+                                self.notify_live_activity("Account locked. Waiting...", 0.0, true).await;
+                                if self.wait_for_unlock().await.is_err() {
+                                    break;
+                                }
+                                continue;
+                            } else {
+                                self.log("Account became locked. Finalizing current batch.", "WARN");
+                                break;
+                            }
+                        }
+                    }
                     break;
                 }
             };
@@ -230,18 +270,20 @@ impl ScrapeEngine {
                 if let Some(id_str) = item.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
                     .or_else(|| item.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string())) {
                     if seen_ids.insert(id_str.clone()) {
-                        // Extract tweet media
                         self.extract_tweet_media(&item, &id_str, &mut media_queue).await;
                         collected_tweets.push(item);
 
                         let mut m = self.metrics.lock().await;
                         m.tweets_matching += 1;
                         m.tweets_processed += 1;
+                        let elapsed_sec = start_time.elapsed().as_secs_f64().max(0.1);
+                        m.speed_tweets_per_sec = (m.tweets_matching as f64 / elapsed_sec).min(100.0);
                     }
                 }
             }
 
             self.log(&format!("Retrieved batch. Total collected: {} tweets", collected_tweets.len()), "INFO");
+            self.notify_live_activity("Processing posts...", 30.0, false).await;
 
             if let Some(c) = resp.cursor.and_then(|c| c.bottom) {
                 if Some(&c) == cursor.as_ref() {
@@ -264,22 +306,53 @@ impl ScrapeEngine {
 
         // 4. Download Enqueued Media Concurrently
         if !media_queue.is_empty() && (self.config.download_images || self.config.download_videos) {
+            self.notify_live_activity("Downloading media...", 60.0, false).await;
             self.download_media_concurrently(&media_queue).await;
         }
 
-        // 5. Continuous Monitoring Loop (if enabled)
+        // Save initial state to disk
+        self.save_metadata_files(&collected_tweets, &profile).await;
+
+        // 5. Continuous Monitoring Loop (Zero-Crash, Non-terminating until user stops)
         if self.config.continuous {
             self.log(&format!("Entering continuous live monitoring mode (polling every {}s)...", self.config.continuous_interval), "INFO");
             let check_interval = Duration::from_secs(self.config.continuous_interval.max(5));
+
             loop {
                 if *self.is_stopping.lock().await {
                     self.log("Stopping continuous live monitoring.", "INFO");
                     break;
                 }
 
+                self.notify_live_activity("Continuous monitoring active", 100.0, false).await;
                 sleep(check_interval).await;
                 if *self.is_stopping.lock().await { break; }
 
+                // Check profile updates
+                if let Ok(fresh_prof) = self.client.get_profile(&self.config.screen_name).await {
+                    if fresh_prof.r#protected {
+                        if self.config.retry_on_locked {
+                            self.log("Account turned private during continuous monitoring. Waiting for unlock...", "WARN");
+                            self.notify_live_activity("Account locked. Waiting...", 0.0, true).await;
+                            if self.wait_for_unlock().await.is_err() {
+                                break;
+                            }
+                            continue;
+                        } else {
+                            self.log("Account turned private and retry_on_locked is false. Ending continuous monitoring.", "WARN");
+                            break;
+                        }
+                    }
+
+                    if fresh_prof.followers != profile.followers || fresh_prof.description != profile.description {
+                        profile = fresh_prof;
+                        let mut m = self.metrics.lock().await;
+                        m.profile_updates += 1;
+                        self.log("Profile change detected and tracked.", "INFO");
+                    }
+                }
+
+                // Poll new statuses
                 match self.client.get_statuses(&self.config.screen_name, None).await {
                     Ok(resp) => {
                         let mut new_items: Vec<MediaItem> = Vec::new();
@@ -302,18 +375,20 @@ impl ScrapeEngine {
                             if !new_items.is_empty() {
                                 self.download_media_concurrently(&new_items).await;
                             }
-                            // Save intermediate files
                             self.save_metadata_files(&collected_tweets, &profile).await;
+                            self.notify_live_activity(&format!("+{} new posts recorded", new_count), 100.0, false).await;
                         }
                     }
                     Err(e) => {
-                        self.log(&format!("Continuous polling check error: {}", e), "WARN");
+                        self.log(&format!("Continuous polling check notice: {}", e), "WARN");
+                        // Delay before next cycle to prevent rapid loop on server outage
+                        sleep(Duration::from_secs(5)).await;
                     }
                 }
             }
         }
 
-        // 6. Save JSON, CSV, Summary, README
+        // 6. Save Final Metadata Files
         self.save_metadata_files(&collected_tweets, &profile).await;
 
         // 7. Compress Archive
@@ -335,6 +410,8 @@ impl ScrapeEngine {
         };
 
         self.log(&format!("Archive successfully built: {:?}", final_path), "SUCCESS");
+        live_activity::end_activity(&format!("Archive completed: {} posts", collected_tweets.len()));
+
         Ok(final_path)
     }
 

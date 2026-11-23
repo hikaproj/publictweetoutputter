@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use std::fs;
 use std::path::Path;
+use futures_util::StreamExt;
+use tokio::io::AsyncWriteExt;
 
 pub const BASE_URL: &str = "https://api.fxtwitter.com";
 pub const USER_AGENT: &str = "FxTwitterArchiveStudio/1.0 (Rust; by Hikaproj)";
@@ -68,7 +70,9 @@ impl FxClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
             .user_agent(USER_AGENT)
-            .timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(20))
+            .pool_idle_timeout(Duration::from_secs(60))
+            .pool_max_idle_per_host(10)
             .build()
             .unwrap_or_default();
         Self { client }
@@ -80,7 +84,6 @@ impl FxClient {
             return Err("Empty username provided".to_string());
         }
 
-        // Try candidate endpoints: 1. v2 profile, 2. direct root user
         let endpoints = [
             format!("{}/2/profile/{}", BASE_URL, clean),
             format!("{}/{}", BASE_URL, clean),
@@ -89,41 +92,50 @@ impl FxClient {
         let mut last_err = String::new();
 
         for url in &endpoints {
-            match self.client.get(url).header("Accept", "application/json").send().await {
-                Ok(res) => {
-                    let status = res.status();
-                    let text = res.text().await.unwrap_or_default();
-
-                    if text.trim_start().starts_with("<!DOCTYPE") || text.trim_start().starts_with("<html") {
-                        last_err = format!("Endpoint {} returned HTML (service down or rate limited)", url);
-                        continue;
-                    }
-
-                    if !status.is_success() {
-                        last_err = format!("HTTP {} from {}", status, url);
-                        continue;
-                    }
-
-                    // Try parsing as ApiResponse<ProfileResponse>
-                    if let Ok(resp) = serde_json::from_str::<ApiResponse<ProfileResponse>>(&text) {
-                        if let Some(user) = resp.data.user {
-                            return Ok(user);
+            let mut attempts = 0;
+            while attempts < 3 {
+                attempts += 1;
+                match self.client.get(url).header("Accept", "application/json").send().await {
+                    Ok(res) => {
+                        let status = res.status();
+                        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                            tokio::time::sleep(Duration::from_millis(800 * attempts)).await;
+                            continue;
                         }
-                    }
 
-                    // Try direct { user: { ... } } or { code: 200, user: { ... } }
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
-                        if let Some(user_val) = v.get("user") {
-                            if let Ok(user) = serde_json::from_value::<UserProfile>(user_val.clone()) {
+                        let text = res.text().await.unwrap_or_default();
+
+                        if text.trim_start().starts_with("<!DOCTYPE") || text.trim_start().starts_with("<html") {
+                            last_err = format!("Endpoint {} returned HTML (service down or rate limited)", url);
+                            break;
+                        }
+
+                        if !status.is_success() {
+                            last_err = format!("HTTP {} from {}", status, url);
+                            break;
+                        }
+
+                        if let Ok(resp) = serde_json::from_str::<ApiResponse<ProfileResponse>>(&text) {
+                            if let Some(user) = resp.data.user {
                                 return Ok(user);
                             }
                         }
-                    }
 
-                    last_err = format!("Failed to parse user JSON from {}", url);
-                }
-                Err(e) => {
-                    last_err = format!("HTTP request error for {}: {}", url, e);
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if let Some(user_val) = v.get("user") {
+                                if let Ok(user) = serde_json::from_value::<UserProfile>(user_val.clone()) {
+                                    return Ok(user);
+                                }
+                            }
+                        }
+
+                        last_err = format!("Failed to parse user JSON from {}", url);
+                        break;
+                    }
+                    Err(e) => {
+                        last_err = format!("HTTP request error for {}: {}", url, e);
+                        tokio::time::sleep(Duration::from_millis(300 * attempts)).await;
+                    }
                 }
             }
         }
@@ -142,35 +154,115 @@ impl FxClient {
             url.push_str(&format!("?cursor={}", c));
         }
 
-        let res = self.client.get(&url)
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|e| format!("HTTP request error: {}", e))?;
+        let mut attempts = 0;
+        let mut last_err = String::new();
 
-        if !res.status().is_success() {
-            return Err(format!("Statuses returned HTTP {}", res.status()));
+        while attempts < 3 {
+            attempts += 1;
+            match self.client.get(&url).header("Accept", "application/json").send().await {
+                Ok(res) => {
+                    let status = res.status();
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tokio::time::sleep(Duration::from_millis(1000 * attempts)).await;
+                        continue;
+                    }
+
+                    if !status.is_success() {
+                        last_err = format!("Statuses returned HTTP {}", status);
+                        tokio::time::sleep(Duration::from_millis(500 * attempts)).await;
+                        continue;
+                    }
+
+                    let text = res.text().await.map_err(|e| e.to_string())?;
+                    if text.trim_start().starts_with("<!DOCTYPE") || text.trim_start().starts_with("<html") {
+                        last_err = "FxTwitter API returned HTML instead of JSON for statuses".to_string();
+                        tokio::time::sleep(Duration::from_millis(500 * attempts)).await;
+                        continue;
+                    }
+
+                    let resp: StatusesResponse = serde_json::from_str(&text)
+                        .map_err(|e| format!("JSON decode error: {}", e))?;
+
+                    return Ok(resp);
+                }
+                Err(e) => {
+                    last_err = format!("HTTP request error: {}", e);
+                    tokio::time::sleep(Duration::from_millis(500 * attempts)).await;
+                }
+            }
         }
 
-        let text = res.text().await.map_err(|e| e.to_string())?;
-        if text.trim_start().starts_with("<!DOCTYPE") || text.trim_start().starts_with("<html") {
-            return Err("FxTwitter API returned HTML instead of JSON for statuses".to_string());
-        }
-
-        let resp: StatusesResponse = serde_json::from_str(&text)
-            .map_err(|e| format!("JSON decode error: {}", e))?;
-
-        Ok(resp)
+        Err(if last_err.is_empty() {
+            "Failed to retrieve statuses after retries".to_string()
+        } else {
+            last_err
+        })
     }
 
+    /// Stream file directly to disk in bounded chunks to prevent Out-Of-Memory (OOM) during long archiving
     pub async fn download_to_file(&self, url: &str, dest: &Path) -> Result<u64, String> {
-        let res = self.client.get(url).send().await.map_err(|e| format!("Network error: {}", e))?;
-        if !res.status().is_success() {
-            return Err(format!("HTTP error {}", res.status()));
+        let mut attempts = 0;
+        let max_attempts = 3;
+        let mut last_error = String::new();
+
+        while attempts < max_attempts {
+            attempts += 1;
+            match self.client.get(url).send().await {
+                Ok(res) => {
+                    if res.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        tokio::time::sleep(Duration::from_millis(600 * (1 << attempts))).await;
+                        continue;
+                    }
+                    if !res.status().is_success() {
+                        last_error = format!("HTTP error {}", res.status());
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                        continue;
+                    }
+
+                    let mut stream = res.bytes_stream();
+                    let mut file = match tokio::fs::File::create(dest).await {
+                        Ok(f) => f,
+                        Err(e) => return Err(format!("File create error: {}", e)),
+                    };
+                    let mut total_bytes = 0u64;
+                    let mut stream_failed = false;
+
+                    while let Some(chunk_res) = stream.next().await {
+                        match chunk_res {
+                            Ok(chunk) => {
+                                total_bytes += chunk.len() as u64;
+                                if let Err(e) = file.write_all(&chunk).await {
+                                    last_error = format!("Write error: {}", e);
+                                    stream_failed = true;
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                last_error = format!("Stream read error: {}", e);
+                                stream_failed = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if stream_failed {
+                        let _ = tokio::fs::remove_file(dest).await;
+                        tokio::time::sleep(Duration::from_millis(300)).await;
+                        continue;
+                    }
+
+                    if let Err(e) = file.flush().await {
+                        return Err(format!("File flush error: {}", e));
+                    }
+                    return Ok(total_bytes);
+                }
+                Err(e) => {
+                    last_error = format!("Network error: {}", e);
+                    tokio::time::sleep(Duration::from_millis(300 * attempts)).await;
+                }
+            }
         }
-        let bytes = res.bytes().await.map_err(|e| format!("Body read error: {}", e))?;
-        let len = bytes.len() as u64;
-        fs::write(dest, bytes).map_err(|e| format!("File write error: {}", e))?;
-        Ok(len)
+
+        Err(last_error)
     }
 }
