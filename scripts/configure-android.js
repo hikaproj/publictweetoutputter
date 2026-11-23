@@ -98,11 +98,23 @@ try {
 
   const srcMainActivity = path.resolve('src-tauri/mobile/android/MainActivity.kt');
   const srcService = path.resolve('src-tauri/mobile/android/FxTweetForegroundService.kt');
+  const targetMainActivity = path.join(pkgDir, 'MainActivity.kt');
 
   if (fs.existsSync(srcMainActivity)) {
-    fs.copyFileSync(srcMainActivity, path.join(pkgDir, 'MainActivity.kt'));
+    fs.copyFileSync(srcMainActivity, targetMainActivity);
     console.log('[configure-android] Injected MainActivity.kt');
   }
+
+  // Ensure correct TauriActivity import (app.tauri.plugin.TauriActivity)
+  if (fs.existsSync(targetMainActivity)) {
+    let mainContent = fs.readFileSync(targetMainActivity, 'utf-8');
+    if (mainContent.includes('import app.tauri.TauriActivity')) {
+      mainContent = mainContent.replace('import app.tauri.TauriActivity', 'import app.tauri.plugin.TauriActivity');
+      fs.writeFileSync(targetMainActivity, mainContent, 'utf-8');
+      console.log('[configure-android] Fixed TauriActivity import in MainActivity.kt');
+    }
+  }
+
   if (fs.existsSync(srcService)) {
     fs.copyFileSync(srcService, path.join(pkgDir, 'FxTweetForegroundService.kt'));
     console.log('[configure-android] Injected FxTweetForegroundService.kt');

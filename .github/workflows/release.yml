@@ -397,7 +397,7 @@ jobs:
 
           # 4. Execute Tauri Android build (builds ARM64 APK with Rust native library)
           echo "Starting Tauri Android build..."
-          npx @tauri-apps/cli android build --apk --target aarch64 || (cd src-tauri/gen/android && ./gradlew assembleRelease || ./gradlew assembleDebug)
+          npx @tauri-apps/cli android build --apk --target aarch64
 
           # 5. Locate generated APK
           FOUND_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | grep -v "unaligned" | head -n 1)
