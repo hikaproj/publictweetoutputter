@@ -64,7 +64,6 @@ pub(crate) async fn stop_backup(
 
 #[tauri::command]
 pub(crate) async fn open_viewer_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
     if let Some(existing) = app.get_webview_window("viewer") {
         let _ = existing.show();
         let _ = existing.set_focus();
