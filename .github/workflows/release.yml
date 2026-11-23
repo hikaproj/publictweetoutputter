@@ -10,6 +10,41 @@ on:
         description: 'Release version (e.g. 1.0.0)'
         required: true
         default: '1.0.0'
+      is_draft:
+        description: 'Draft release (下書きとして作成する)'
+        required: true
+        type: boolean
+        default: false
+      is_prerelease:
+        description: 'Pre-release (プレリリースとして作成する)'
+        required: true
+        type: boolean
+        default: false
+      include_nodejs:
+        description: 'Include Node.js Edition (Node.js版を含める)'
+        required: true
+        type: boolean
+        default: true
+      include_windows:
+        description: 'Include Windows Desktop & CLI (Windows版を含める)'
+        required: true
+        type: boolean
+        default: true
+      include_macos:
+        description: 'Include macOS Desktop & CLI (macOS Universal版を含める)'
+        required: true
+        type: boolean
+        default: true
+      include_linux:
+        description: 'Include Linux & Arch Linux (Linux版を含める)'
+        required: true
+        type: boolean
+        default: true
+      include_installers:
+        description: 'Include Universal Installers & Docker (install.sh/ps1/dockerを含める)'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -20,6 +55,7 @@ jobs:
   # --------------------------------------------------------------------------
   package-nodejs:
     name: Package Node.js Version
+    if: github.event_name != 'workflow_dispatch' || inputs.include_nodejs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -57,15 +93,18 @@ jobs:
           zip -r "${DIST_NAME}.zip" "${DIST_NAME}"
           tar -czf "${DIST_NAME}.tar.gz" "${DIST_NAME}"
           sha256sum "${DIST_NAME}.zip" > "${DIST_NAME}.zip.sha256"
+          sha256sum "${DIST_NAME}.tar.gz" > "${DIST_NAME}.tar.gz.sha256"
 
       - name: Upload Node.js Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nodejs-dist
-          path: dist/*.zip*
+          path: |
+            dist/*.zip*
+            dist/*.tar.gz*
 
   # --------------------------------------------------------------------------
-  # 2. Build Desktop Binaries (Windows, macOS, Linux Debian & Arch)
+  # 2. Build Desktop Binaries (Windows, macOS Universal, Linux Debian & Arch)
   # --------------------------------------------------------------------------
   build-desktop:
     name: Build Desktop (${{ matrix.platform }})
@@ -79,59 +118,99 @@ jobs:
             target: x86_64-pc-windows-msvc
           - platform: macos-universal
             os: macos-latest
-            target: universal-apple-darwin
+            target: aarch64-apple-darwin
           - platform: linux-x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
 
     steps:
+      - name: Check if platform is enabled
+        id: check_enabled
+        run: |
+          ENABLED=true
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ matrix.platform }}" = "windows-x86_64" ] && [ "${{ inputs.include_windows }}" = "false" ]; then
+              ENABLED=false
+            fi
+            if [ "${{ matrix.platform }}" = "macos-universal" ] && [ "${{ inputs.include_macos }}" = "false" ]; then
+              ENABLED=false
+            fi
+            if [ "${{ matrix.platform }}" = "linux-x86_64" ] && [ "${{ inputs.include_linux }}" = "false" ]; then
+              ENABLED=false
+            fi
+          fi
+          echo "ENABLED=$ENABLED" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Checkout repository
+        if: steps.check_enabled.outputs.ENABLED == 'true'
         uses: actions/checkout@v4
 
-      - name: Setup Node.js & Rust toolchain
+      - name: Setup Node.js
+        if: steps.check_enabled.outputs.ENABLED == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install Rust stable
+      - name: Install Rust stable (Windows & Linux)
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os != 'macOS'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Linux dependencies (Ubuntu/Debian)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev build-essential
+      - name: Install Rust stable (macOS Intel & Apple Silicon Universal)
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
 
-      - name: Install Rust Dependencies & Build Standalone CLI
+      - name: Install Linux dependencies (Ubuntu/Debian)
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Linux'
+        run: |
+          sudo add-apt-repository -y universe || true
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev build-essential libayatana-appindicator3-dev || \
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev build-essential libappindicator3-dev
+
+      - name: Build Standalone CLI (Windows & Linux)
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os != 'macOS'
         working-directory: src-tauri
         run: |
-          cargo build --release --bin fxtweet-cli
+          cargo build --release --target ${{ matrix.target }} --bin fxtweet-cli
+
+      - name: Build Universal CLI (macOS lipo)
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
+        working-directory: src-tauri
+        run: |
+          cargo build --release --target x86_64-apple-darwin --bin fxtweet-cli
+          cargo build --release --target aarch64-apple-darwin --bin fxtweet-cli
+          mkdir -p ../release-bin
+          lipo -create -output ../release-bin/fxtweet-cli \
+            target/x86_64-apple-darwin/release/fxtweet-cli \
+            target/aarch64-apple-darwin/release/fxtweet-cli
 
       - name: Package Desktop Artifacts (Windows)
-        if: runner.os == 'Windows'
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Windows'
         run: |
           mkdir release-bin
-          cp src-tauri/target/release/fxtweet-cli.exe release-bin/
+          cp src-tauri/target/${{ matrix.target }}/release/fxtweet-cli.exe release-bin/
           Compress-Archive -Path release-bin/* -DestinationPath fxtweet-studio-windows-cli.zip
 
       - name: Package Desktop Artifacts (macOS)
-        if: runner.os == 'macOS'
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'macOS'
         run: |
-          mkdir release-bin
-          cp src-tauri/target/release/fxtweet-cli release-bin/
           tar -czf fxtweet-studio-macos-cli.tar.gz -C release-bin fxtweet-cli
 
       - name: Package Desktop Artifacts (Linux / Debian / Arch)
-        if: runner.os == 'Linux'
+        if: steps.check_enabled.outputs.ENABLED == 'true' && runner.os == 'Linux'
         run: |
           mkdir -p release-bin
-          cp src-tauri/target/release/fxtweet-cli release-bin/
+          cp src-tauri/target/${{ matrix.target }}/release/fxtweet-cli release-bin/
           tar -czf fxtweet-studio-linux-cli.tar.gz -C release-bin fxtweet-cli
           
-          # Arch Linux PKGBUILD generation
+          # Arch Linux PKGBUILD generation (self-contained package)
           cat << 'EOF' > release-bin/PKGBUILD
+          # Maintainer: Hikaproj
           pkgname=fxtweet-studio-bin
           pkgver=1.0.0
           pkgrel=1
@@ -140,7 +219,8 @@ jobs:
           url="https://github.com/Hikaproj/publictweetoutputter"
           license=('MIT')
           depends=('webkit2gtk-4.1' 'gtk3' 'openssl')
-          source=("fxtweet-studio-linux-cli.tar.gz")
+          source=("fxtweet-cli")
+          sha256sums=('SKIP')
           package() {
               install -Dm755 "${srcdir}/fxtweet-cli" "${pkgdir}/usr/bin/fxtweet-studio"
           }
@@ -148,6 +228,7 @@ jobs:
           tar -czf fxtweet-studio-arch-package.tar.gz -C release-bin PKGBUILD fxtweet-cli
 
       - name: Upload Platform Artifacts
+        if: steps.check_enabled.outputs.ENABLED == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}
@@ -161,6 +242,7 @@ jobs:
   publish-release:
     name: Publish GitHub Release (by Hikaproj)
     needs: [package-nodejs, build-desktop]
+    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -184,7 +266,9 @@ jobs:
           merge-multiple: true
 
       - name: Copy Installers & Manifests to Release Assets
+        if: github.event_name != 'workflow_dispatch' || inputs.include_installers
         run: |
+          mkdir -p release-assets
           cp install.sh release-assets/
           cp install.ps1 release-assets/
           cp docker-compose.yml release-assets/
@@ -201,13 +285,15 @@ jobs:
         with:
           tag_name: ${{ steps.get_version.outputs.TAG }}
           name: "Release ${{ steps.get_version.outputs.VERSION }} - FxTwitter Archive Studio"
+          draft: ${{ github.event_name == 'workflow_dispatch' && inputs.is_draft || false }}
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.is_prerelease || false }}
           body: |
             ## FxTwitter Archive Studio ${{ steps.get_version.outputs.VERSION }}
             *Created by **Hikaproj***
             
             ### Quick Install & Run (Linux / macOS / Windows):
             ```bash
-            # Linux (Debian, Arch, Ubuntu, Fedora) & macOS (Intel & Apple Silicon)
+            # Linux (Debian, Arch, Ubuntu, Fedora) & macOS (Intel & Apple Silicon Universal)
             curl -fsSL https://raw.githubusercontent.com/Hikaproj/publictweetoutputter/main/install.sh | bash
             
             # Windows PowerShell (x86_64 / arm64)
@@ -223,9 +309,10 @@ jobs:
               - `install.ps1` (Windows PowerShell auto-installer)
             - **Node.js Edition** (Portable, zero-install Web & CLI suite):
               - `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.zip`
+              - `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.tar.gz`
             - **Windows Desktop & CLI** (Windows 10/11 x86_64):
               - `fxtweet-studio-windows-cli.zip`
-            - **macOS Desktop & CLI** (macOS 10.15+, Universal Binary):
+            - **macOS Desktop & CLI** (macOS Universal Binary for Intel & Apple Silicon):
               - `fxtweet-studio-macos-cli.tar.gz`
             - **Linux / Debian / Ubuntu** (Debian, Ubuntu 20.04/22.04/24.04):
               - `fxtweet-studio-linux-cli.tar.gz`
@@ -245,8 +332,6 @@ jobs:
               - Direct `.zip` and `.xarchpjzip` archive decompression & browsing.
               - One-click high-resolution Tweet Card Image Export (PNG).
             - **Clean Precision Design**: Zero emojis, pure SVG vector line icons, high contrast.
-          draft: false
-          prerelease: false
           files: |
             release-assets/*
         env:
