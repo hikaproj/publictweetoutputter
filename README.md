@@ -117,8 +117,9 @@ Windows, macOS, Linux (Debian, Arch), iOS, iPadOS, Android で動作する軽量
 5. `fxtweet-studio-linux-x86_64-vX.X.X.tar.gz` (Linux 向け GUI & CLI 同梱)
 6. `fxtweet-studio-arch-x86_64-vX.X.X.tar.gz` (Arch Linux 向け PKGBUILD 付属パッケージ)
 7. `fxtweet-studio-nodejs-vX.X.X.zip` / `.tar.gz` (Node.js 版ポータブル一式)
-8. `Dockerfile` & `docker-compose.yml` (Docker コンテナ実行マニフェスト)
-9. `SHA256SUMS.txt` (整合性チェックサム)
+8. `fxtweet-studio-docker-vX.X.X.zip` (Docker 実行パッケージ一式 - 解凍して `docker compose up -d` だけで即起動可能)
+9. `Dockerfile` & `docker-compose.yml` (Docker コンテナ単体マニフェスト)
+10. `SHA256SUMS.txt` (整合性チェックサム)
 
 ---
 

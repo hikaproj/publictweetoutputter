@@ -18,7 +18,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::inspect_profile,
-            commands::start_backup
+            commands::start_backup,
+            commands::open_archive_native
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

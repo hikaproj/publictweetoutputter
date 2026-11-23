@@ -74,22 +74,63 @@ impl FxClient {
 
     pub async fn get_profile(&self, screen_name: &str) -> Result<UserProfile, String> {
         let clean = screen_name.trim_start_matches('@').trim();
-        let url = format!("{}/2/profile/{}", BASE_URL, clean);
-
-        let res = self.client.get(&url)
-            .send()
-            .await
-            .map_err(|e| format!("HTTP request error: {}", e))?;
-
-        if !res.status().is_success() {
-            return Err(format!("Profile returned HTTP {}", res.status()));
+        if clean.is_empty() {
+            return Err("Empty username provided".to_string());
         }
 
-        let resp: ApiResponse<ProfileResponse> = res.json()
-            .await
-            .map_err(|e| format!("JSON decode error: {}", e))?;
+        // Try candidate endpoints: 1. v2 profile, 2. direct root user
+        let endpoints = [
+            format!("{}/2/profile/{}", BASE_URL, clean),
+            format!("{}/{}", BASE_URL, clean),
+        ];
 
-        resp.data.user.ok_or_else(|| "User object missing in API response".to_string())
+        let mut last_err = String::new();
+
+        for url in &endpoints {
+            match self.client.get(url).header("Accept", "application/json").send().await {
+                Ok(res) => {
+                    let status = res.status();
+                    let text = res.text().await.unwrap_or_default();
+
+                    if text.trim_start().starts_with("<!DOCTYPE") || text.trim_start().starts_with("<html") {
+                        last_err = format!("Endpoint {} returned HTML (service down or rate limited)", url);
+                        continue;
+                    }
+
+                    if !status.is_success() {
+                        last_err = format!("HTTP {} from {}", status, url);
+                        continue;
+                    }
+
+                    // Try parsing as ApiResponse<ProfileResponse>
+                    if let Ok(resp) = serde_json::from_str::<ApiResponse<ProfileResponse>>(&text) {
+                        if let Some(user) = resp.data.user {
+                            return Ok(user);
+                        }
+                    }
+
+                    // Try direct { user: { ... } } or { code: 200, user: { ... } }
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(user_val) = v.get("user") {
+                            if let Ok(user) = serde_json::from_value::<UserProfile>(user_val.clone()) {
+                                return Ok(user);
+                            }
+                        }
+                    }
+
+                    last_err = format!("Failed to parse user JSON from {}", url);
+                }
+                Err(e) => {
+                    last_err = format!("HTTP request error for {}: {}", url, e);
+                }
+            }
+        }
+
+        Err(if last_err.is_empty() {
+            format!("User @{} could not be found or API returned an invalid response.", clean)
+        } else {
+            last_err
+        })
     }
 
     pub async fn get_statuses(&self, screen_name: &str, cursor: Option<&str>) -> Result<StatusesResponse, String> {
@@ -100,6 +141,7 @@ impl FxClient {
         }
 
         let res = self.client.get(&url)
+            .header("Accept", "application/json")
             .send()
             .await
             .map_err(|e| format!("HTTP request error: {}", e))?;
@@ -108,8 +150,12 @@ impl FxClient {
             return Err(format!("Statuses returned HTTP {}", res.status()));
         }
 
-        let resp: StatusesResponse = res.json()
-            .await
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if text.trim_start().starts_with("<!DOCTYPE") || text.trim_start().starts_with("<html") {
+            return Err("FxTwitter API returned HTML instead of JSON for statuses".to_string());
+        }
+
+        let resp: StatusesResponse = serde_json::from_str(&text)
             .map_err(|e| format!("JSON decode error: {}", e))?;
 
         Ok(resp)

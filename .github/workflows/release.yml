@@ -97,6 +97,15 @@ jobs:
           tar -czf "${DIST_NAME}.tar.gz" "${DIST_NAME}"
           sha256sum "${DIST_NAME}.zip" > "${DIST_NAME}.zip.sha256"
           sha256sum "${DIST_NAME}.tar.gz" > "${DIST_NAME}.tar.gz.sha256"
+          cd ..
+
+          # Create dedicated Docker Distribution Package (clean, self-contained for docker compose up)
+          DOCKER_NAME="fxtweet-studio-docker-v${{ steps.get_version.outputs.VERSION }}"
+          mkdir -p dist/${DOCKER_NAME}
+          cp -r lib public server.js cli.js package.json package-lock.json Dockerfile docker-compose.yml .dockerignore README.md dist/${DOCKER_NAME}/
+          cd dist
+          zip -r "${DOCKER_NAME}.zip" "${DOCKER_NAME}"
+          sha256sum "${DOCKER_NAME}.zip" > "${DOCKER_NAME}.zip.sha256"
 
       - name: Upload Node.js Artifacts
         uses: actions/upload-artifact@v4
@@ -339,11 +348,12 @@ EOF
             ```
 
             ### Downloads:
-            - **Windows GUI & CLI**: `fxtweet-studio-windows-x86_64-${{ steps.get_version.outputs.VERSION }}.zip` (contains `fxtweet-studio.exe` GUI & `fxtweet-cli.exe` CLI)
-            - **macOS Universal GUI & CLI**: `fxtweet-studio-macos-universal-${{ steps.get_version.outputs.VERSION }}.tar.gz` (Universal binary for Intel & Apple Silicon)
-            - **Linux GUI & CLI**: `fxtweet-studio-linux-x86_64-${{ steps.get_version.outputs.VERSION }}.tar.gz`
-            - **Arch Linux Package**: `fxtweet-studio-arch-x86_64-${{ steps.get_version.outputs.VERSION }}.tar.gz` (includes `PKGBUILD`)
-            - **Node.js Edition**: `fxtweet-studio-nodejs-${{ steps.get_version.outputs.VERSION }}.zip` / `.tar.gz`
+            - **Windows GUI & CLI**: `fxtweet-studio-windows-x86_64-v${{ steps.get_version.outputs.VERSION }}.zip` (contains `fxtweet-studio.exe` GUI & `fxtweet-cli.exe` CLI)
+            - **macOS Universal GUI & CLI**: `fxtweet-studio-macos-universal-v${{ steps.get_version.outputs.VERSION }}.tar.gz` (Universal binary for Intel & Apple Silicon)
+            - **Linux GUI & CLI**: `fxtweet-studio-linux-x86_64-v${{ steps.get_version.outputs.VERSION }}.tar.gz`
+            - **Arch Linux Package**: `fxtweet-studio-arch-x86_64-v${{ steps.get_version.outputs.VERSION }}.tar.gz` (includes `PKGBUILD`)
+            - **Docker Edition**: `fxtweet-studio-docker-v${{ steps.get_version.outputs.VERSION }}.zip` (Self-contained Dockerfile & compose)
+            - **Node.js Edition**: `fxtweet-studio-nodejs-v${{ steps.get_version.outputs.VERSION }}.zip` / `.tar.gz`
 
             ### Features:
             - Ultra-fast asynchronous Twitter/X timeline and media backup using FxTwitter v2 API

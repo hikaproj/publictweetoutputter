@@ -1,6 +1,43 @@
 // FxTwitter Archive Studio - Frontend Application Logic
+// Supports both Rust Desktop Native (Tauri IPC) and Node.js Web Server
 
 document.addEventListener('DOMContentLoaded', () => {
+  const isTauri = typeof window !== 'undefined' && Boolean(window.__TAURI__?.core?.invoke);
+  console.log(`[FxTwitter Studio] Runtime mode: ${isTauri ? 'Rust Desktop Native (Tauri)' : 'Node.js Web'}`);
+
+  // Connection Indicator
+  const connectionDot = document.getElementById('connection-dot');
+  const connectionText = document.getElementById('connection-text');
+  if (isTauri && connectionText) {
+    connectionText.textContent = 'RUST NATIVE ENGINE';
+    if (connectionDot) connectionDot.classList.add('online');
+  }
+
+  // ==========================================================================
+  // Mode Switcher: Downloader ⇄ Integrated Viewer
+  // ==========================================================================
+  const appModeArchiveBtn = document.getElementById('appModeArchiveBtn');
+  const appModeViewerBtn = document.getElementById('appModeViewerBtn');
+  const viewArchiveSection = document.getElementById('viewArchiveSection');
+  const viewViewerSection = document.getElementById('viewViewerSection');
+
+  function switchAppMode(mode) {
+    if (mode === 'viewer') {
+      if (appModeArchiveBtn) appModeArchiveBtn.classList.remove('active');
+      if (appModeViewerBtn) appModeViewerBtn.classList.add('active');
+      if (viewArchiveSection) viewArchiveSection.classList.add('hidden');
+      if (viewViewerSection) viewViewerSection.classList.remove('hidden');
+    } else {
+      if (appModeViewerBtn) appModeViewerBtn.classList.remove('active');
+      if (appModeArchiveBtn) appModeArchiveBtn.classList.add('active');
+      if (viewViewerSection) viewViewerSection.classList.add('hidden');
+      if (viewArchiveSection) viewArchiveSection.classList.remove('hidden');
+    }
+  }
+
+  if (appModeArchiveBtn) appModeArchiveBtn.addEventListener('click', () => switchAppMode('archive'));
+  if (appModeViewerBtn) appModeViewerBtn.addEventListener('click', () => switchAppMode('viewer'));
+
   // Theme Switching (Default: Light Mode)
   const themeToggleBtn = document.getElementById('themeToggleBtn');
   const themeToggleLabel = document.getElementById('themeToggleLabel');
@@ -49,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const multiAccountTray = document.getElementById('multiAccountTray');
   const multiAccountActiveCount = document.getElementById('multiAccountActiveCount');
   const multiAccountList = document.getElementById('multiAccountList');
-  const multiAccountsState = new Map(); // screenName -> state object
+  const multiAccountsState = new Map();
 
   if (maxConcurrentAccountsInput && concurrentAccountsVal) {
     maxConcurrentAccountsInput.addEventListener('input', (e) => {
@@ -75,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const downloadVideosToggle = document.getElementById('downloadVideosToggle');
   const videoQualitySelect = document.getElementById('videoQualitySelect');
   const mediaConcurrencyInput = document.getElementById('mediaConcurrencyInput');
-  const concurrencyVal = document.getElementById('concurrencyVal');
 
   // Filters & Range
   const filterOriginals = document.getElementById('filterOriginals');
@@ -84,8 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterQuotes = document.getElementById('filterQuotes');
   const dateFromInput = document.getElementById('dateFromInput');
   const dateToInput = document.getElementById('dateToInput');
-  const dirOptionNewest = document.getElementById('dirOptionNewest');
-  const dirOptionOldest = document.getElementById('dirOptionOldest');
 
   // Profile Toggles
   const profHeader = document.getElementById('profHeader');
@@ -110,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const archiveDownloadWrap = document.getElementById('archiveDownloadWrap');
   const archiveDownloadLink = document.getElementById('archiveDownloadLink');
   const archiveDownloadText = document.getElementById('archiveDownloadText');
+  const openInViewerAfterExportBtn = document.getElementById('openInViewerAfterExportBtn');
 
   const mTweetsCount = document.getElementById('mTweetsCount');
   const mSpeedText = document.getElementById('mSpeedText');
@@ -133,92 +168,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const feedCount = document.getElementById('feedCount');
   const logCount = document.getElementById('logCount');
 
-  const connectionDot = document.getElementById('connection-dot');
-  const connectionText = document.getElementById('connection-text');
-
   let tweetCounter = 0;
   let logCounter = 0;
   let isTaskRunning = false;
   let isTaskPaused = false;
+  let lastGeneratedArchive = null;
 
-  // Segmented direction control
-  if (dirOptionNewest && dirOptionOldest) {
-    dirOptionNewest.addEventListener('click', () => {
-      dirOptionNewest.classList.add('active');
-      dirOptionOldest.classList.remove('active');
-      dirOptionNewest.querySelector('input').checked = true;
+  // Preset Buttons
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.getAttribute('data-preset');
+      if (p === 'fast_media') {
+        downloadImagesToggle.checked = true;
+        downloadVideosToggle.checked = true;
+        filterOriginals.checked = true;
+        filterReplies.checked = false;
+        filterReposts.checked = false;
+        filterQuotes.checked = true;
+        exportFormatSelect.value = 'xarchpjzip';
+      } else if (p === 'text_only') {
+        downloadImagesToggle.checked = false;
+        downloadVideosToggle.checked = false;
+        filterOriginals.checked = true;
+        filterReplies.checked = true;
+        filterReposts.checked = true;
+        filterQuotes.checked = true;
+        exportFormatSelect.value = 'zip';
+      } else if (p === 'archive_orig') {
+        downloadImagesToggle.checked = true;
+        imageQualitySelect.value = 'orig';
+        downloadVideosToggle.checked = true;
+        videoQualitySelect.value = 'highest';
+        filterOriginals.checked = true;
+        filterReplies.checked = true;
+        filterReposts.checked = true;
+        filterQuotes.checked = true;
+        exportFormatSelect.value = 'xarchpjzip';
+      }
     });
-    dirOptionOldest.addEventListener('click', () => {
-      dirOptionOldest.classList.add('active');
-      dirOptionNewest.classList.remove('active');
-      dirOptionOldest.querySelector('input').checked = true;
-    });
-  }
-
-  // Concurrency slider
-  mediaConcurrencyInput.addEventListener('input', (e) => {
-    concurrencyVal.textContent = e.target.value;
   });
-
-  // Presets handling
-  const presetChips = document.querySelectorAll('.preset-chip');
-  presetChips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      presetChips.forEach(p => p.classList.remove('active'));
-      chip.classList.add('active');
-      applyPreset(chip.getAttribute('data-preset'));
-    });
-  });
-
-  function applyPreset(presetId) {
-    if (presetId === 'full') {
-      downloadImagesToggle.checked = true;
-      imageQualitySelect.value = 'orig';
-      downloadVideosToggle.checked = true;
-      videoQualitySelect.value = 'highest';
-      filterOriginals.checked = true;
-      filterReplies.checked = true;
-      filterReposts.checked = true;
-      filterQuotes.checked = true;
-      retryOnLockedToggle.checked = true;
-      startOnLockedToggle.checked = true;
-      exportFormatSelect.value = 'zip';
-    } else if (presetId === 'media_only') {
-      downloadImagesToggle.checked = true;
-      imageQualitySelect.value = 'orig';
-      downloadVideosToggle.checked = true;
-      videoQualitySelect.value = '1080p';
-      filterOriginals.checked = true;
-      filterReplies.checked = false;
-      filterReposts.checked = false;
-      filterQuotes.checked = true;
-      retryOnLockedToggle.checked = true;
-      startOnLockedToggle.checked = true;
-      exportFormatSelect.value = 'zip';
-    } else if (presetId === 'speed_light') {
-      downloadImagesToggle.checked = false;
-      downloadVideosToggle.checked = false;
-      filterOriginals.checked = true;
-      filterReplies.checked = true;
-      filterReposts.checked = true;
-      filterQuotes.checked = true;
-      retryOnLockedToggle.checked = false;
-      startOnLockedToggle.checked = false;
-      exportFormatSelect.value = 'zip';
-    } else if (presetId === 'archive_orig') {
-      downloadImagesToggle.checked = true;
-      imageQualitySelect.value = 'orig';
-      downloadVideosToggle.checked = true;
-      videoQualitySelect.value = 'highest';
-      filterOriginals.checked = true;
-      filterReplies.checked = false;
-      filterReposts.checked = false;
-      filterQuotes.checked = true;
-      retryOnLockedToggle.checked = true;
-      startOnLockedToggle.checked = true;
-      exportFormatSelect.value = 'tar.gz';
-    }
-  }
 
   // Tab switching
   tabButtons.forEach(btn => {
@@ -237,9 +225,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Profile Inspection
+  // ==========================================================================
+  // Profile Inspection (Rust Native or Web Fallback)
+  // ==========================================================================
   inspectUserBtn.addEventListener('click', async () => {
-    const handle = screenNameInput.value.replace(/^@/, '').trim();
+    const rawVal = screenNameInput.value.trim();
+    const handle = rawVal.split(/[,\s\n]+/)[0]?.replace(/^@/, '').trim();
     if (!handle) {
       alert('ユーザー名を入力してください');
       screenNameInput.focus();
@@ -250,17 +241,32 @@ document.addEventListener('DOMContentLoaded', () => {
     inspectUserBtn.textContent = '確認中...';
 
     try {
-      const res = await fetch(`/api/profile/${encodeURIComponent(handle)}`);
-      const data = await res.json();
+      let user = null;
 
-      if (!data.found) {
-        alert(`ユーザー @${handle} が見つかりませんでした: ${data.message || data.error}`);
-        return;
+      if (isTauri) {
+        // Rust Native IPC
+        user = await window.__TAURI__.core.invoke('inspect_profile', { handle });
+      } else {
+        // Node.js Web Fallback with HTML Protection
+        const res = await fetch(`/api/profile/${encodeURIComponent(handle)}`);
+        const text = await res.text();
+        if (text.trimStart().startsWith('<!DOCTYPE') || text.trimStart().startsWith('<html')) {
+          throw new Error('FxTwitter API またはサーバーが HTML を返しました (鍵垢・APIレート制限の可能性があります)');
+        }
+        const data = JSON.parse(text);
+        if (!data.found) {
+          alert(`ユーザー @${handle} が見つかりませんでした: ${data.message || data.error}`);
+          return;
+        }
+        user = data.user;
       }
 
-      renderProfilePreview(data.user);
+      if (user) {
+        renderProfilePreview(user);
+      }
     } catch (err) {
-      alert(`プロフィール取得エラー: ${err.message}`);
+      console.error('Inspect error:', err);
+      alert(`プロフィール取得エラー: ${err.message || err}`);
     } finally {
       inspectUserBtn.disabled = false;
       inspectUserBtn.textContent = 'プロフィール確認';
@@ -268,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function renderProfilePreview(user) {
+    if (!user) return;
     profilePreviewArea.classList.remove('hidden');
     previewName.textContent = user.name || user.screen_name;
     previewScreenName.textContent = `@${user.screen_name}`;
@@ -298,53 +305,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (user.website) {
       const displayUrl = typeof user.website === 'object' ? (user.website.display_url || user.website.url) : user.website;
-      previewUrl.querySelector('.meta-val').textContent = displayUrl;
+      previewUrl.querySelector('.meta-val').textContent = displayUrl || '';
       previewUrl.classList.remove('hidden');
     } else {
       previewUrl.classList.add('hidden');
     }
 
     previewFollowers.textContent = Number(user.followers || 0).toLocaleString();
-    previewTweetCount.textContent = Number(user.statuses || 0).toLocaleString();
-  }
-
-  // Render Multi-Account Status Chips
-  function renderMultiAccountChips() {
-    if (!multiAccountList || !multiAccountTray) return;
-    multiAccountList.innerHTML = '';
-    let activeRunning = 0;
-
-    multiAccountsState.forEach((info, handle) => {
-      const chip = document.createElement('div');
-      chip.className = 'account-status-chip';
-      chip.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; background-color: var(--bg-card); border: 1px solid var(--border-subtle); font-size: 11px;';
-
-      let stateBadge = `<span style="color: var(--text-muted);">待機</span>`;
-      if (['INITIALIZING', 'FETCHING', 'DOWNLOADING_MEDIA'].includes(info.state)) {
-        stateBadge = `<span style="color: var(--accent-primary); font-weight: 600;">取得中</span>`;
-        activeRunning++;
-      } else if (['LOCKED_WAITING', 'LOCKED_WAITING_RESUME'].includes(info.state)) {
-        stateBadge = `<span style="color: var(--accent-amber); font-weight: 600;">鍵垢待機</span>`;
-        activeRunning++;
-      } else if (info.state === 'COMPLETED') {
-        stateBadge = `<span style="color: var(--accent-emerald); font-weight: 600;">完了</span>`;
-      } else if (info.state === 'STOPPED') {
-        stateBadge = `<span style="color: var(--text-muted); font-weight: 600;">中断</span>`;
-      } else if (info.state === 'ERROR') {
-        stateBadge = `<span style="color: var(--accent-rose); font-weight: 600;">エラー</span>`;
-      }
-
-      chip.innerHTML = `
-        <span class="mono" style="font-weight: 600; color: var(--text-primary);">@${escapeHtml(info.screenName || handle)}</span>
-        <span class="mono" style="font-size: 10px;">${stateBadge}</span>
-        <span class="mono" style="color: var(--text-secondary); font-size: 10px;">${Number(info.tweets || 0).toLocaleString()} tw</span>
-      `;
-      multiAccountList.appendChild(chip);
-    });
-
-    if (multiAccountActiveCount) {
-      multiAccountActiveCount.textContent = multiAccountsState.size;
-    }
+    previewTweetCount.textContent = Number(user.statuses || user.media_count || 0).toLocaleString();
   }
 
   // Gather Config Form Data
@@ -390,7 +358,29 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Start Task
+  function setRunningUI(running) {
+    isTaskRunning = running;
+    startTaskBtn.disabled = running;
+    pauseTaskBtn.disabled = !running;
+    stopExportBtn.disabled = !running;
+    cancelTaskBtn.disabled = !running;
+
+    if (running) {
+      statusBanner.textContent = '取得中 (RUNNING)';
+      statusBanner.className = 'badge badge-running';
+      taskStateLabel.textContent = 'タイムライン取得・メディア保存中...';
+      taskStatusSub.textContent = 'FxTwitter API からポストおよび画像・動画を最高速取得しています';
+    } else {
+      statusBanner.textContent = '完了 (DONE)';
+      statusBanner.className = 'badge badge-public';
+      taskStateLabel.textContent = '処理が完了しました';
+      taskStatusSub.textContent = '出力アーカイブをダウンロードするか、X風ビューアーで閲覧できます';
+    }
+  }
+
+  // ==========================================================================
+  // Start Backup Task (Rust Native Engine or Node.js Web Server)
+  // ==========================================================================
   startTaskBtn.addEventListener('click', async () => {
     const config = getFormData();
     if (!config.screenNames || config.screenNames.length === 0) {
@@ -399,374 +389,459 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Reset feed & logs
     tweetsFeedGrid.innerHTML = '';
     tweetCounter = 0;
     feedCount.textContent = '0';
     archiveDownloadWrap.classList.add('hidden');
 
-    if (config.screenNames.length > 1) {
-      if (multiAccountTray) multiAccountTray.classList.remove('hidden');
-      multiAccountsState.clear();
-      config.screenNames.forEach(h => {
-        multiAccountsState.set(h.toLowerCase(), { screenName: h, state: 'QUEUED', tweets: 0, media: 0 });
-      });
-      renderMultiAccountChips();
-    } else {
-      if (multiAccountTray) multiAccountTray.classList.add('hidden');
+    if (isTauri) {
+      // Execute via Rust Native Engine
+      setRunningUI(true);
+      appendTerminalLog('Starting backup via Rust Native ScrapeEngine...', 'INFO');
+
+      try {
+        const finalPath = await window.__TAURI__.core.invoke('start_backup', {
+          config: {
+            screen_name: config.screenName,
+            download_images: config.downloadImages,
+            image_quality: config.imageQuality,
+            download_videos: config.downloadVideos,
+            video_quality: config.videoQuality,
+            date_from: config.dateFrom,
+            date_to: config.dateTo,
+            direction: config.direction,
+            include_replies: config.includeReplies,
+            include_reposts: config.includeReposts,
+            include_quotes: config.includeQuotes,
+            include_originals: config.includeOriginals,
+            retry_on_locked: config.retryOnLocked,
+            start_on_locked: config.startOnLocked,
+            export_format: config.exportFormat,
+            media_concurrency: config.mediaConcurrency,
+            max_tweets: 0,
+            continuous: config.continuous,
+            continuous_interval: 30
+          }
+        });
+
+        setRunningUI(false);
+        lastGeneratedArchive = finalPath;
+        archiveDownloadWrap.classList.remove('hidden');
+        archiveDownloadText.textContent = `出力完了: ${finalPath}`;
+        archiveDownloadLink.href = '#';
+        archiveDownloadLink.onclick = (e) => {
+          e.preventDefault();
+          switchAppMode('viewer');
+          loadArchiveNative(finalPath);
+        };
+        appendTerminalLog(`Backup completed successfully at: ${finalPath}`, 'SUCCESS');
+      } catch (err) {
+        setRunningUI(false);
+        alert(`Rust エンジン実行エラー: ${err}`);
+        appendTerminalLog(`Error: ${err}`, 'ERROR');
+      }
+      return;
     }
 
+    // Node.js Web Execution
     try {
       const res = await fetch('/api/task/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
       });
-
       const data = await res.json();
       if (!res.ok) {
         alert(data.error || 'タスク開始エラー');
         return;
       }
-
       setRunningUI(true);
     } catch (err) {
       alert(`通信エラー: ${err.message}`);
     }
   });
 
-  // Pause Task
-  pauseTaskBtn.addEventListener('click', async () => {
-    if (isTaskPaused) {
-      await fetch('/api/task/resume', { method: 'POST' });
-      pauseTaskBtn.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        一時停止
-      `;
-      isTaskPaused = false;
-    } else {
-      await fetch('/api/task/pause', { method: 'POST' });
-      pauseTaskBtn.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
-        再開
-      `;
-      isTaskPaused = true;
-    }
-  });
-
-  // Stop & Export Now
-  stopExportBtn.addEventListener('click', async () => {
-    if (!confirm('取得を中断して、現在までに取得できたデータのみを即座に出力しますか？')) {
-      return;
-    }
-    stopExportBtn.disabled = true;
-    stopExportBtn.textContent = '書き出し中...';
-    await fetch('/api/task/stop-export', { method: 'POST' });
-  });
-
-  // Cancel Task
-  cancelTaskBtn.addEventListener('click', async () => {
-    if (!confirm('本当に取得タスクを中止しますか？')) {
-      return;
-    }
-    await fetch('/api/task/cancel', { method: 'POST' });
-  });
-
-  function setRunningUI(running) {
-    isTaskRunning = running;
-    startTaskBtn.disabled = running;
-    pauseTaskBtn.disabled = !running;
-    stopExportBtn.disabled = !running;
-    cancelTaskBtn.disabled = !running;
-  }
-
-  // Connect SSE
-  function initSSE() {
-    const eventSource = new EventSource('/api/task/events');
-
-    eventSource.onopen = () => {
-      connectionDot.style.backgroundColor = 'var(--accent-emerald)';
-      connectionText.textContent = 'API CONNECTED';
-    };
-
-    eventSource.onerror = () => {
-      connectionDot.style.backgroundColor = 'var(--accent-amber)';
-      connectionText.textContent = 'RECONNECTING...';
-    };
-
-    eventSource.addEventListener('state', (e) => {
-      const stateData = JSON.parse(e.data);
-      updateTelemetryState(stateData);
-    });
-
-    eventSource.addEventListener('log', (e) => {
-      const log = JSON.parse(e.data);
-      appendTerminalLog(log);
-    });
-
-    eventSource.addEventListener('tweet', (e) => {
-      const tweet = JSON.parse(e.data);
-      appendTweetCard(tweet);
-    });
-
-    eventSource.addEventListener('profile_update', (e) => {
-      const update = JSON.parse(e.data);
-      appendTerminalLog({
-        timestamp: update.timestamp,
-        level: 'SUCCESS',
-        message: `[PROFILE UPDATE] プロフィール変更を検知・保存しました: ${update.updated_fields.join(', ')}`
-      });
-    });
-
-    eventSource.addEventListener('archive_progress', (e) => {
-      const prog = JSON.parse(e.data);
-      taskStatusSub.textContent = `アーカイブ作成中... (${Math.round(prog.percentage || 0)}%)`;
+  if (openInViewerAfterExportBtn) {
+    openInViewerAfterExportBtn.addEventListener('click', () => {
+      switchAppMode('viewer');
+      if (lastGeneratedArchive) {
+        loadArchiveNative(lastGeneratedArchive);
+      }
     });
   }
 
-  function updateTelemetryState(stateData) {
-    const { state, metrics, profile, archiveResult, screenName } = stateData;
-
-    if (screenName) {
-      multiAccountsState.set(screenName.toLowerCase(), {
-        screenName,
-        state,
-        tweets: metrics?.tweetsMatching || 0,
-        media: metrics?.mediaDownloaded || 0
-      });
-      if (multiAccountsState.size > 1 || (multiAccountTray && !multiAccountTray.classList.contains('hidden'))) {
-        if (multiAccountTray) multiAccountTray.classList.remove('hidden');
-        renderMultiAccountChips();
-      }
-    }
-
-    statusBanner.className = 'status-callout';
-    if (state === 'IDLE') {
-      taskStateLabel.textContent = '待機中 (IDLE)';
-      taskStatusSub.textContent = '対象ユーザーを入力して「一括取得を開始」を押してください';
-      setRunningUI(false);
-    } else if (state === 'INITIALIZING') {
-      statusBanner.classList.add('state-fetching');
-      taskStateLabel.textContent = '初期化中 (INITIALIZING)';
-      taskStatusSub.textContent = `@${screenName} のプロフィールおよびステータスを確認中...`;
-      setRunningUI(true);
-    } else if (state === 'FETCHING') {
-      statusBanner.classList.add('state-fetching');
-      taskStateLabel.textContent = 'タイムライン取得中 (FETCHING)';
-      taskStatusSub.textContent = `FxTwitter API経由でポストとメタデータをストリーミング取得しています...`;
-      setRunningUI(true);
-    } else if (state === 'LOCKED_WAITING') {
-      statusBanner.classList.add('state-locked');
-      taskStateLabel.textContent = '鍵垢検出・公開待機中 (LOCKED WAITING)';
-      taskStatusSub.textContent = `@${screenName} は現在非公開です。公開アカウントに切り替わるまで自動待機中...`;
-      mLockStatusText.textContent = '鍵垢待機中';
-      mLockStatusText.style.color = 'var(--accent-amber)';
-      setRunningUI(true);
-    } else if (state === 'LOCKED_WAITING_RESUME') {
-      statusBanner.classList.add('state-locked');
-      taskStateLabel.textContent = '取得途中の鍵垢化・再開待機中';
-      taskStatusSub.textContent = `取得中に鍵垢化しました。公開再開まで待機中。「中断して出力」で即座に保存可能。`;
-      mLockStatusText.textContent = '鍵垢復帰待機';
-      mLockStatusText.style.color = 'var(--accent-amber)';
-      setRunningUI(true);
-    } else if (state === 'DOWNLOADING_MEDIA') {
-      statusBanner.classList.add('state-fetching');
-      taskStateLabel.textContent = 'メディア保存中 (DOWNLOADING MEDIA)';
-      taskStatusSub.textContent = `指定画質の画像・動画を並列ダウンロードしています...`;
-      setRunningUI(true);
-    } else if (state === 'FINALIZING') {
-      statusBanner.classList.add('state-fetching');
-      taskStateLabel.textContent = 'アーカイブ圧縮中 (FINALIZING)';
-      taskStatusSub.textContent = `CSV, JSON, メディアをまとめて圧縮アーカイブを出力しています...`;
-      setRunningUI(true);
-    } else if (state === 'COMPLETED') {
-      statusBanner.classList.add('state-completed');
-      taskStateLabel.textContent = 'バックアップ完了 (COMPLETED)';
-      taskStatusSub.textContent = `すべてのポスト・メディア・メタデータの保存が完了しました`;
-      setRunningUI(false);
-      if (archiveResult) {
-        showArchiveDownload(archiveResult);
-      }
-    } else if (state === 'STOPPED') {
-      taskStateLabel.textContent = '中断完了 (STOPPED)';
-      taskStatusSub.textContent = `タスクが中断されました。取得済みデータは保存されています。`;
-      setRunningUI(false);
-      if (archiveResult) {
-        showArchiveDownload(archiveResult);
-      }
-    } else if (state === 'ERROR') {
-      statusBanner.classList.add('state-error');
-      taskStateLabel.textContent = 'エラー発生 (ERROR)';
-      taskStatusSub.textContent = `エラーが発生しました。ログコンソールをご確認ください。`;
-      setRunningUI(false);
-    }
-
-    if (metrics) {
-      mTweetsCount.textContent = Number(metrics.tweetsMatching || 0).toLocaleString();
-      mSpeedText.textContent = `${metrics.speedTweetsPerSec || 0} tw/s`;
-      mMediaCount.textContent = Number(metrics.mediaDownloaded || 0).toLocaleString();
-      mMediaBytes.textContent = formatBytes(metrics.totalBytesDownloaded || 0);
-      mFoundMedia.textContent = Number((metrics.imagesFound || 0) + (metrics.videosFound || 0)).toLocaleString();
-      mFoundMediaSub.textContent = `画像 ${metrics.imagesFound || 0} / 動画 ${metrics.videosFound || 0}`;
-      mProfUpdates.textContent = Number(metrics.profileUpdatesDetected || 0).toLocaleString();
-      mLockRetries.textContent = Number(metrics.lockRetries || 0).toLocaleString();
-
-      const totalMedia = (metrics.imagesFound || 0) + (metrics.videosFound || 0);
-      if (totalMedia > 0) {
-        const percent = Math.min(100, Math.round(((metrics.mediaDownloaded || 0) / totalMedia) * 100));
-        mediaProgressBar.style.width = `${percent}%`;
-        mediaProgressPercent.textContent = `${percent}% (${metrics.mediaDownloaded || 0} / ${totalMedia})`;
-      } else {
-        mediaProgressBar.style.width = '0%';
-        mediaProgressPercent.textContent = '0%';
-      }
-    }
-
-    if (profile && profilePreviewArea.classList.contains('hidden')) {
-      renderProfilePreview(profile);
-    }
-  }
-
-  function showArchiveDownload(archiveResult) {
-    archiveDownloadWrap.classList.remove('hidden');
-    const filename = archiveResult.archivePath.split(/[\\/]/).pop();
-    archiveDownloadLink.href = `/api/download/${encodeURIComponent(filename)}`;
-    archiveDownloadText.textContent = `ダウンロード: ${filename} (${archiveResult.formattedSize})`;
-  }
-
-  function appendTerminalLog(log) {
-    logCounter++;
-    logCount.textContent = logCounter;
-
-    const line = document.createElement('div');
-    const levelClass = `log-level-${(log.level || 'info').toLowerCase()}`;
-    line.className = `log-entry ${levelClass}`;
-
-    line.innerHTML = `<span class="log-timestamp mono">[${escapeHtml(log.timestamp || '')}]</span> <span class="mono">[${escapeHtml(log.level || 'INFO')}]</span> ${escapeHtml(log.message || '')}`;
-    terminalLogs.appendChild(line);
+  function appendTerminalLog(msg, level = 'INFO') {
+    if (!terminalLogs) return;
+    const entry = document.createElement('div');
+    entry.className = `log-entry log-level-${level.toLowerCase()}`;
+    const ts = new Date().toLocaleTimeString('ja-JP');
+    entry.innerHTML = `<span class="log-timestamp">[${ts}]</span> [${level}] ${escapeHtml(msg)}`;
+    terminalLogs.appendChild(entry);
     terminalLogs.scrollTop = terminalLogs.scrollHeight;
+    logCounter++;
+    if (logCount) logCount.textContent = logCounter;
   }
 
-  function appendTweetCard(tweet) {
-    tweetCounter++;
-    feedCount.textContent = tweetCounter;
+  // ==========================================================================
+  // INTEGRATED X (TWITTER) VIEWER LOGIC
+  // ==========================================================================
+  let vTweets = [];
+  let vProfile = null;
+  let vFilter = 'all';
+  const vMediaBlobMap = new Map();
 
-    const placeholder = tweetsFeedGrid.querySelector('.feed-placeholder');
-    if (placeholder) placeholder.remove();
+  const viewerFilePicker = document.getElementById('viewerFilePicker');
+  const viewerDropZone = document.getElementById('viewerDropZone');
+  const viewerSearchInput = document.getElementById('viewerSearchInput');
+  const viewerContentWrapper = document.getElementById('viewerContentWrapper');
+  const viewerTweetsList = document.getElementById('viewerTweetsList');
+  const viewerLoadedFilename = document.getElementById('viewerLoadedFilename');
 
-    const card = document.createElement('div');
-    card.className = 'tweet-box';
+  // File picker handler
+  if (viewerFilePicker) {
+    viewerFilePicker.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) handleIncomingArchive(file);
+    });
+  }
 
-    const author = tweet.author || {};
-    const dateStr = tweet.created_at ? new Date(tweet.created_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-
-    let tagsHtml = '';
-    if (tweet.replying_to) tagsHtml += `<span class="tag-pill">返信 @${escapeHtml(tweet.replying_to)}</span>`;
-    if (tweet.reposted_by) tagsHtml += `<span class="tag-pill">RT @${escapeHtml(tweet.reposted_by.screen_name)}</span>`;
-    if (tweet.quote) tagsHtml += `<span class="tag-pill">引用</span>`;
-
-    let mediaHtml = '';
-    const photos = tweet.media?.photos || [];
-    const videos = tweet.media?.videos || [];
-
-    if (photos.length > 0 || videos.length > 0) {
-      mediaHtml += `<div class="tweet-thumbs-strip">`;
-      photos.slice(0, 4).forEach(p => {
-        mediaHtml += `<img src="${escapeHtml(p.url)}" alt="photo" class="tweet-thumb-img" loading="lazy">`;
+  // Drop zone handler
+  if (viewerDropZone) {
+    ['dragenter', 'dragover'].forEach(ev => {
+      viewerDropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        viewerDropZone.classList.add('drag-over');
       });
-      videos.slice(0, 2).forEach(v => {
-        const thumb = v.thumbnail_url || '';
-        mediaHtml += `<img src="${escapeHtml(thumb)}" alt="video thumbnail" class="tweet-thumb-img" loading="lazy">`;
+    });
+
+    ['dragleave', 'drop'].forEach(ev => {
+      viewerDropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        viewerDropZone.classList.remove('drag-over');
       });
-      mediaHtml += `</div>`;
+    });
+
+    viewerDropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        handleIncomingArchive(files[0]);
+      }
+    });
+  }
+
+  // Search input filter
+  if (viewerSearchInput) {
+    viewerSearchInput.addEventListener('input', renderViewerTweets);
+  }
+
+  // Filter tabs
+  document.querySelectorAll('.v-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.v-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      vFilter = tab.getAttribute('data-vfilter') || 'all';
+      renderViewerTweets();
+    });
+  });
+
+  async function handleIncomingArchive(file) {
+    const nameLower = file.name.toLowerCase();
+    if (viewerLoadedFilename) viewerLoadedFilename.textContent = `読み込み中: ${file.name}...`;
+
+    if (nameLower.endsWith('.xarchpjzip') || nameLower.endsWith('.zip')) {
+      await loadArchiveZip(file);
+    } else if (nameLower.endsWith('.json')) {
+      const text = await file.text();
+      try {
+        const json = JSON.parse(text);
+        if (Array.isArray(json)) {
+          vTweets = json;
+        } else if (json.tweets) {
+          vTweets = json.tweets;
+          vProfile = json.profile || null;
+        }
+        renderViewerAll(file.name);
+      } catch (err) {
+        alert('JSON パースエラー: ' + err.message);
+      }
+    } else {
+      alert('対応していない形式です。.xarchpjzip, .zip, または .json を指定してください。');
+    }
+  }
+
+  // Rust Native Archive Loader
+  async function loadArchiveNative(filePath) {
+    if (!isTauri) return;
+    try {
+      if (viewerLoadedFilename) viewerLoadedFilename.textContent = `ネイティブ解凍中: ${filePath}...`;
+      const res = await window.__TAURI__.core.invoke('open_archive_native', { filePath });
+      if (res && res.success) {
+        vTweets = res.tweets || [];
+        vProfile = res.profile || null;
+        renderViewerAll(res.filename);
+      }
+    } catch (err) {
+      console.error('Native archive load error:', err);
+      alert(`ネイティブ解凍エラー: ${err}`);
+    }
+  }
+
+  // JSZip Archive Loader for Web / Fallback
+  async function loadArchiveZip(file) {
+    try {
+      if (typeof JSZip === 'undefined') {
+        throw new Error('JSZip ライブラリが読み込まれていません');
+      }
+
+      const zip = await JSZip.loadAsync(file);
+      vMediaBlobMap.clear();
+
+      let tweetsEntry = null;
+      let profileEntry = null;
+      const mediaTasks = [];
+
+      zip.forEach((relPath, entry) => {
+        const lower = relPath.toLowerCase();
+        if (lower.endsWith('tweets.json') || lower === 'tweets.json') {
+          tweetsEntry = entry;
+        } else if (lower.endsWith('profile.json') || lower === 'profile.json') {
+          profileEntry = entry;
+        } else if (!entry.dir && (lower.startsWith('media/') || lower.startsWith('profile_media/'))) {
+          mediaTasks.push(async () => {
+            const blob = await entry.async('blob');
+            const objUrl = URL.createObjectURL(blob);
+            vMediaBlobMap.set(relPath, objUrl);
+            vMediaBlobMap.set(relPath.split('/').pop(), objUrl);
+          });
+        }
+      });
+
+      if (!tweetsEntry) {
+        throw new Error('アーカイブ内に tweets.json が見つかりませんでした');
+      }
+
+      const tweetsText = await tweetsEntry.async('text');
+      vTweets = JSON.parse(tweetsText);
+
+      if (profileEntry) {
+        const profText = await profileEntry.async('text');
+        vProfile = JSON.parse(profText);
+      }
+
+      await Promise.all(mediaTasks.map(t => t()));
+      renderViewerAll(file.name);
+    } catch (err) {
+      console.error('Zip parse error:', err);
+      alert(`アーカイブの展開に失敗しました: ${err.message}`);
+    }
+  }
+
+  function resolveMedia(pathStr) {
+    if (!pathStr) return '';
+    if (vMediaBlobMap.has(pathStr)) return vMediaBlobMap.get(pathStr);
+    const fname = pathStr.split('/').pop();
+    if (vMediaBlobMap.has(fname)) return vMediaBlobMap.get(fname);
+    return pathStr;
+  }
+
+  function renderViewerAll(filename) {
+    if (viewerLoadedFilename) viewerLoadedFilename.textContent = `表示中: ${filename} (${vTweets.length.toLocaleString()} 件)`;
+    if (viewerContentWrapper) viewerContentWrapper.classList.remove('hidden');
+
+    // Profile Render
+    const author = vProfile || vTweets[0]?.author || {};
+    const vProfileName = document.getElementById('vProfileName');
+    const vProfileHandle = document.getElementById('vProfileHandle');
+    const vProfileBio = document.getElementById('vProfileBio');
+    const vAvatarImg = document.getElementById('vAvatarImg');
+    const vBannerImg = document.getElementById('vBannerImg');
+    const vFollowersCount = document.getElementById('vFollowersCount');
+    const vFollowingCount = document.getElementById('vFollowingCount');
+    const vTweetCount = document.getElementById('vTweetCount');
+
+    if (vProfileName) vProfileName.textContent = author.name || author.screen_name || 'X Archive';
+    if (vProfileHandle) vProfileHandle.textContent = `@${author.screen_name || ''}`;
+    if (vProfileBio) vProfileBio.textContent = author.description || '';
+    if (vFollowersCount) vFollowersCount.textContent = Number(author.followers || 0).toLocaleString();
+    if (vFollowingCount) vFollowingCount.textContent = Number(author.following || 0).toLocaleString();
+    if (vTweetCount) vTweetCount.textContent = vTweets.length.toLocaleString();
+
+    const avatarSrc = resolveMedia('profile_media/avatar.jpg') || author.avatar_url;
+    if (vAvatarImg && avatarSrc) vAvatarImg.src = avatarSrc;
+
+    const bannerSrc = resolveMedia('profile_media/banner.jpg') || author.banner_url;
+    if (vBannerImg && bannerSrc) {
+      vBannerImg.src = bannerSrc;
+      document.getElementById('vBannerWrapper').style.display = 'block';
+    } else {
+      document.getElementById('vBannerWrapper').style.display = 'none';
     }
 
-    card.innerHTML = `
-      <div class="tweet-box-top">
-        <div class="tweet-author-block">
-          <img src="${escapeHtml(author.avatar_url || '')}" class="tweet-author-avatar" alt="Avatar">
-          <div>
-            <span class="tweet-author-label">${escapeHtml(author.name || author.screen_name || '')}</span>
-            <span class="tweet-author-sub mono">@${escapeHtml(author.screen_name || '')}</span>
+    renderViewerTweets();
+  }
+
+  function renderViewerTweets() {
+    if (!viewerTweetsList) return;
+    const query = (viewerSearchInput?.value || '').toLowerCase().trim();
+
+    const filtered = vTweets.filter(t => {
+      const hasPhotos = t.media?.photos?.length > 0;
+      const hasVideos = t.media?.videos?.length > 0;
+
+      if (vFilter === 'media' && !hasPhotos && !hasVideos) return false;
+      if (vFilter === 'replies' && !t.replying_to) return false;
+
+      if (query) {
+        const textMatch = (t.text || '').toLowerCase().includes(query);
+        const authorMatch = (t.author?.name || '').toLowerCase().includes(query) || (t.author?.screen_name || '').toLowerCase().includes(query);
+        if (!textMatch && !authorMatch) return false;
+      }
+
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      viewerTweetsList.innerHTML = '<div class="p-6 text-center text-muted" style="color: var(--text-muted); font-size: 13px;">該当するポストはありません</div>';
+      return;
+    }
+
+    viewerTweetsList.innerHTML = '';
+    filtered.forEach(t => {
+      const card = document.createElement('article');
+      card.className = 'v-tweet-card';
+
+      const author = t.author || vProfile || {};
+      const avatarSrc = resolveMedia('profile_media/avatar.jpg') || author.avatar_url || '';
+      const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+      // Media Grid
+      let mediaHtml = '';
+      const photos = t.media?.photos || [];
+      const videos = t.media?.videos || [];
+
+      if (photos.length > 0 || videos.length > 0) {
+        mediaHtml += `<div class="v-t-media-grid">`;
+        photos.forEach((p, idx) => {
+          const localSrc = resolveMedia(`media/${t.id}_photo_${idx + 1}.jpg`) || resolveMedia(p.url);
+          mediaHtml += `<img src="${localSrc}" alt="Photo" loading="lazy">`;
+        });
+        videos.forEach((v, idx) => {
+          const localSrc = resolveMedia(`media/${t.id}_video_${idx + 1}.mp4`) || resolveMedia(v.url);
+          mediaHtml += `<video controls preload="none"><source src="${localSrc}"></video>`;
+        });
+        mediaHtml += `</div>`;
+      }
+
+      card.innerHTML = `
+        <img src="${escapeHtml(avatarSrc)}" class="v-t-avatar" alt="Avatar">
+        <div class="v-t-content">
+          <div class="v-t-header">
+            <span class="v-t-name">${escapeHtml(author.name || author.screen_name || '')}</span>
+            <span class="v-t-handle mono">@${escapeHtml(author.screen_name || '')}</span>
+            <span class="v-t-date">· ${escapeHtml(dateStr)}</span>
+          </div>
+          <div class="v-t-body">${escapeHtml(t.text || '')}</div>
+          ${mediaHtml}
+          <div class="v-t-actions">
+            <div class="v-t-action-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              <span>${Number(t.replies || 0).toLocaleString()}</span>
+            </div>
+            <div class="v-t-action-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span>${Number(t.retweets || t.reposts || 0).toLocaleString()}</span>
+            </div>
+            <div class="v-t-action-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+              <span>${Number(t.likes || 0).toLocaleString()}</span>
+            </div>
+            <div class="v-t-action-item btn-export-png" style="color: var(--accent-primary); font-weight: 600;" data-id="${t.id}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span>画像出力 (PNG)</span>
+            </div>
           </div>
         </div>
-        <span class="tweet-timestamp mono">${escapeHtml(dateStr)}</span>
-      </div>
-      <div class="tweet-body">${escapeHtml(tweet.text || '')}</div>
-      ${mediaHtml}
-      <div class="tweet-meta-footer">
-        ${tagsHtml}
-        <span class="mono" style="display:inline-flex;align-items:center;gap:3px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-          ${Number(tweet.likes || 0).toLocaleString()}
-        </span>
-        <span class="mono" style="display:inline-flex;align-items:center;gap:3px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:12px;height:12px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          ${Number(tweet.reposts || tweet.retweets || 0).toLocaleString()}
-        </span>
-      </div>
-    `;
+      `;
 
-    tweetsFeedGrid.insertBefore(card, tweetsFeedGrid.firstChild);
-
-    if (tweetsFeedGrid.children.length > 80) {
-      tweetsFeedGrid.lastChild.remove();
-    }
+      card.querySelector('.btn-export-png')?.addEventListener('click', () => exportViewerTweetCard(t.id));
+      viewerTweetsList.appendChild(card);
+    });
   }
 
-  async function loadHistory() {
-    historyList.innerHTML = '<p class="helper-text p-4">読み込み中...</p>';
-    try {
-      const res = await fetch('/api/history');
-      const data = await res.json();
-      const backups = data.backups || [];
+  // Export Tweet as 2x Retina PNG Card
+  async function exportViewerTweetCard(tweetId) {
+    const tweet = vTweets.find(x => String(x.id) === String(tweetId));
+    if (!tweet) return;
 
-      if (backups.length === 0) {
-        historyList.innerHTML = '<p class="helper-text p-4">過去のバックアップはまだありません。</p>';
-        return;
-      }
+    const author = tweet.author || vProfile || {};
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const width = 800;
+    const padding = 36;
+    const contentWidth = width - padding * 2;
 
-      historyList.innerHTML = '';
-      backups.forEach(b => {
-        const item = document.createElement('div');
-        item.className = 'history-card';
-
-        if (b.type === 'archive') {
-          item.innerHTML = `
-            <div>
-              <div class="history-title">${escapeHtml(b.filename)}</div>
-              <div class="history-description mono">${escapeHtml(b.formattedSize)} · ${new Date(b.createdAt).toLocaleString()}</div>
-            </div>
-            <a href="/api/download/${encodeURIComponent(b.filename)}" class="btn btn-secondary btn-sm" download>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              保存
-            </a>
-          `;
+    ctx.font = '20px Inter, sans-serif';
+    const lines = [];
+    const rawLines = (tweet.text || '').split('\n');
+    rawLines.forEach(l => {
+      let cur = '';
+      for (let i = 0; i < l.length; i++) {
+        if (ctx.measureText(cur + l[i]).width > contentWidth) {
+          lines.push(cur);
+          cur = l[i];
         } else {
-          item.innerHTML = `
-            <div>
-              <div class="history-title" style="display:inline-flex;align-items:center;gap:4px;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px;height:13px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                ${escapeHtml(b.folderName)}
-              </div>
-              <div class="history-description mono">${b.summary?.total_tweets_collected || 0} 件 · ${new Date(b.createdAt).toLocaleString()}</div>
-            </div>
-            <span class="badge badge-public">フォルダ</span>
-          `;
+          cur += l[i];
         }
-        historyList.appendChild(item);
-      });
-    } catch (err) {
-      historyList.innerHTML = `<p class="helper-text p-4 text-danger">履歴取得エラー: ${err.message}</p>`;
-    }
-  }
+      }
+      lines.push(cur);
+    });
 
-  function formatBytes(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    const textHeight = lines.length * 28;
+    const height = padding * 2 + 60 + textHeight + 70;
+
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    ctx.scale(2, 2);
+
+    // Background
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.fillStyle = isDark ? '#111318' : '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = isDark ? '#2C3240' : '#E2E8F0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, width, height);
+
+    // Header
+    ctx.fillStyle = isDark ? '#F3F4F6' : '#0F172A';
+    ctx.font = 'bold 18px Inter, sans-serif';
+    ctx.fillText(author.name || author.screen_name || 'User', padding, padding + 24);
+    ctx.fillStyle = isDark ? '#6B7280' : '#64748B';
+    ctx.font = '14px Fira Code, monospace';
+    ctx.fillText(`@${author.screen_name || ''}`, padding, padding + 46);
+
+    // Body
+    ctx.fillStyle = isDark ? '#F3F4F6' : '#0F172A';
+    ctx.font = '18px Inter, sans-serif';
+    lines.forEach((ln, idx) => {
+      ctx.fillText(ln, padding, padding + 80 + idx * 28);
+    });
+
+    // Watermark
+    ctx.fillStyle = isDark ? '#4B5563' : '#94A3B8';
+    ctx.font = '12px Fira Code, monospace';
+    ctx.fillText('FxTwitter Archive Studio · by Hikaproj', padding, height - padding + 12);
+
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tweet_${tweet.id}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
   }
 
   function escapeHtml(str) {
@@ -779,6 +854,31 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
-  // Start SSE connection
-  initSSE();
+  // Load Past History (from /api/history when in Web mode)
+  async function loadHistory() {
+    if (!historyList) return;
+    if (isTauri) {
+      historyList.innerHTML = '<p class="helper-text p-4">デスクトップ版では output フォルダ内に保存された .xarchpjzip または ZIP を上のビューアーで直接開くことができます。</p>';
+      return;
+    }
+    try {
+      const res = await fetch('/api/history');
+      const items = await res.json();
+      if (!Array.isArray(items) || items.length === 0) {
+        historyList.innerHTML = '<p class="helper-text p-4">バックアップ履歴はありません</p>';
+        return;
+      }
+      historyList.innerHTML = items.map(item => `
+        <div class="history-card">
+          <div>
+            <div class="history-title">${escapeHtml(item.name)}</div>
+            <div class="history-description">${escapeHtml(item.created_at || '')} · ${item.size_mb || 0} MB</div>
+          </div>
+          <a href="/output/${encodeURIComponent(item.name)}" download class="btn btn-secondary btn-sm">ダウンロード</a>
+        </div>
+      `).join('');
+    } catch (e) {
+      historyList.innerHTML = '<p class="helper-text p-4">履歴の取得に失敗しました</p>';
+    }
+  }
 });
