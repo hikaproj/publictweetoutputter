@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
 use futures_util::stream::{self, StreamExt};
 
-use crate::fxtwitter::{self, FxClient, UserProfile};
+use crate::fxtwitter::{FxClient, UserProfile};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScrapeConfig {
@@ -259,7 +259,7 @@ impl ScrapeEngine {
         // 5. Continuous Monitoring Loop (if enabled)
         if self.config.continuous {
             self.log(&format!("Entering continuous live monitoring mode (polling every {}s)...", self.config.continuous_interval), "INFO");
-            let mut check_interval = Duration::from_secs(self.config.continuous_interval.max(5));
+            let check_interval = Duration::from_secs(self.config.continuous_interval.max(5));
             loop {
                 if *self.is_stopping.lock().await {
                     self.log("Stopping continuous live monitoring.", "INFO");
