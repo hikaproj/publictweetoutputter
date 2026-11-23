@@ -595,6 +595,7 @@
     }
 
     .drop-zone {
+      position: relative;
       border: 2px dashed var(--border-dark);
       border-radius: 12px;
       padding: 20px 14px;
@@ -603,6 +604,7 @@
       transition: all 0.15s;
       margin-top: 10px;
       background-color: var(--bg);
+      overflow: hidden;
     }
     .drop-zone:hover, .drop-zone.dragover {
       border-color: var(--accent);
@@ -968,13 +970,27 @@
         <p style="font-size: 12px; color: var(--text-sub); line-height: 1.4;">
           <strong>.xarchpjzip</strong> または <strong>.zip</strong> を選択するか、画面上にドラッグ＆ドロップしてください。
         </p>
-        <input type="file" id="filePicker" accept=".xarchpjzip,.zip,.json,.tar,.gz" style="display: none;">
-        <div class="drop-zone" id="dropZone" onclick="document.getElementById('filePicker').click()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 26px; height: 26px; margin: 0 auto 6px; display: block; color: var(--accent);">
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="filePicker" accept=".xarchpjzip,.zip,.json,.tar,.gz" style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 26px; height: 26px; margin: 0 auto 6px; display: block; color: var(--accent); pointer-events: none;">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
           </svg>
-          <span style="font-size: 13px; font-weight: 700; color: var(--text-main);" id="dropZoneText">.xarchpjzip / .zip を選択</span>
-          <div style="font-size: 11px; color: var(--text-sub); margin-top: 4px;">またはここにファイルをドロップ</div>
+          <span style="font-size: 13px; font-weight: 700; color: var(--text-main); pointer-events: none;" id="dropZoneText">.xarchpjzip / .zip を選択</span>
+          <div style="font-size: 11px; color: var(--text-sub); margin-top: 4px; pointer-events: none;">またはここにファイルをドロップ</div>
+        </div>
+        <button type="button" id="btnBrowseNative" style="width: 100%; margin-top: 8px; padding: 6px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; cursor: pointer; background: var(--bg-surface); border: 1px solid var(--border-dark); color: var(--text-main); transition: all 0.15s;">
+          ファイル選択ダイアログを開く
+        </button>
+      </div>
+
+      <!-- Past Archives Panel -->
+      <div class="sidebar-panel" id="pastArchivesPanel">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <h3 class="panel-title" style="margin-bottom: 0;">過去の出力 (output/)</h3>
+          <button type="button" id="btnRefreshPastArchives" style="background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 600;">更新</button>
+        </div>
+        <div id="pastArchivesList" style="display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto;">
+          <div style="font-size: 12px; color: var(--text-sub);">バックアップ一覧を読み込み中...</div>
         </div>
       </div>
 
@@ -1069,6 +1085,136 @@
       if (file) handleIncomingFile(file);
     });
 
+    async function unpackZipBytes(data, sourceName) {
+      if (typeof JSZip === 'undefined') {
+        throw new Error('JSZip ライブラリをロードできませんでした');
+      }
+
+      const zip = await JSZip.loadAsync(data);
+      cachedBlobs.clear();
+
+      // 1. tweets.json
+      const tweetsFile = Object.values(zip.files).find(f => (f.name.endsWith('tweets.json') || f.name === 'tweets.json') && !f.dir);
+      if (tweetsFile) {
+        const jsonText = await tweetsFile.async('text');
+        const parsed = JSON.parse(jsonText);
+        if (Array.isArray(parsed)) {
+          allTweets = parsed;
+        } else if (parsed && Array.isArray(parsed.tweets)) {
+          allTweets = parsed.tweets;
+          if (!userProfile && parsed.profile) userProfile = parsed.profile;
+        } else {
+          allTweets = [];
+        }
+      } else {
+        allTweets = [];
+      }
+
+      // 2. profile.json
+      const profileFile = Object.values(zip.files).find(f => (f.name.endsWith('profile.json') || f.name === 'profile.json') && !f.dir);
+      if (profileFile) {
+        const jsonText = await profileFile.async('text');
+        userProfile = JSON.parse(jsonText);
+      }
+
+      // 3. summary.json
+      const summaryFile = Object.values(zip.files).find(f => (f.name.endsWith('summary.json') || f.name === 'summary.json') && !f.dir);
+      if (summaryFile) {
+        const jsonText = await summaryFile.async('text');
+        archiveSummary = JSON.parse(jsonText);
+      }
+
+      // 4. Cache media files
+      let mediaCount = 0;
+      for (const [path, entry] of Object.entries(zip.files)) {
+        if (!entry.dir && (path.includes('media/') || path.includes('profile_media/'))) {
+          const blob = await entry.async('blob');
+          const blobUrl = URL.createObjectURL(blob);
+          const cleanKey = path.replace(/^.*?(media\/|profile_media\/)/, '$1');
+          cachedBlobs.set(cleanKey, blobUrl);
+          cachedBlobs.set(path, blobUrl);
+          cachedBlobs.set(path.split('/').pop(), blobUrl);
+          mediaCount++;
+        }
+      }
+
+      const displayName = String(sourceName).split('/').pop().split('\\').pop();
+      renderAll(displayName, mediaCount);
+      showToast(`展開完了: ${allTweets.length} 件のポスト`);
+    }
+
+    async function loadArchiveFromPathOrUrl(pathOrUrl) {
+      if (!pathOrUrl) return;
+      const displayName = String(pathOrUrl).split('/').pop().split('\\').pop();
+      document.getElementById('dropZoneText').textContent = displayName;
+      showToast(`アーカイブ読み込み中: ${displayName}`);
+
+      if (isTauri) {
+        try {
+          const bytes = await window.__TAURI__.core.invoke('read_archive_file', { filePath: pathOrUrl });
+          await unpackZipBytes(new Uint8Array(bytes), displayName);
+          return;
+        } catch (err) {
+          console.warn('Native read_archive_file failed, trying fetch fallback:', err);
+        }
+      }
+
+      // Web or relative fetch
+      try {
+        let fetchUrl = pathOrUrl;
+        if (!fetchUrl.startsWith('/') && !fetchUrl.startsWith('http') && !fetchUrl.startsWith('.')) {
+          fetchUrl = `/output/${encodeURIComponent(displayName)}`;
+        }
+        const res = await fetch(fetchUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        const arrayBuffer = await res.arrayBuffer();
+        await unpackZipBytes(arrayBuffer, displayName);
+      } catch (err) {
+        console.error(err);
+        alert(`アーカイブ読み込みエラー: ${err.message || err}`);
+      }
+    }
+
+    async function loadPastArchives() {
+      const container = document.getElementById('pastArchivesList');
+      if (!container) return;
+
+      try {
+        let items = [];
+        if (isTauri) {
+          items = await window.__TAURI__.core.invoke('list_backups', { outputDir: 'output' });
+        } else {
+          const res = await fetch('/api/history');
+          if (res.ok) {
+            const data = await res.json();
+            items = Array.isArray(data) ? data : (data.backups || []);
+          }
+        }
+
+        if (!Array.isArray(items) || items.length === 0) {
+          container.innerHTML = '<div style="font-size: 12px; color: var(--text-sub); padding: 4px 0;">保存済みのアーカイブはありません</div>';
+          return;
+        }
+
+        container.innerHTML = items.slice(0, 10).map(item => {
+          const cleanPath = (item.path || item.name).replace(/\\/g, '/');
+          const safeName = escapeHtml(item.name);
+          const safeMeta = escapeHtml(item.created_at || (item.size_mb + ' MB'));
+          return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); gap: 6px;">
+              <div style="min-width: 0; flex: 1;">
+                <div style="font-size: 12px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${safeName}">${safeName}</div>
+                <div style="font-size: 11px; color: var(--text-sub);">${safeMeta}</div>
+              </div>
+              <button type="button" class="btn-demo-load" style="padding: 3px 8px; font-size: 11px; flex-shrink: 0;" onclick="loadArchiveFromPathOrUrl('${escapeHtml(cleanPath)}')">開く</button>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = `<div style="font-size: 12px; color: var(--text-sub);">取得エラー: ${escapeHtml(err.message || String(err))}</div>`;
+      }
+    }
+
     async function handleIncomingFile(file) {
       document.getElementById('dropZoneText').textContent = file.name;
       showToast(`アーカイブ読み込み中: ${file.name}`);
@@ -1078,58 +1224,8 @@
       // Browser JSZip (Supports .xarchpjzip and .zip)
       if (name.endsWith('.zip') || name.endsWith('.xarchpjzip') || file.type.includes('zip')) {
         try {
-          if (typeof JSZip === 'undefined') {
-            throw new Error('JSZip ライブラリをロードできませんでした');
-          }
-
-          const zip = await JSZip.loadAsync(file);
-          cachedBlobs.clear();
-
-          // 1. tweets.json
-          const tweetsFile = Object.values(zip.files).find(f => (f.name.endsWith('tweets.json') || f.name === 'tweets.json') && !f.dir);
-          if (tweetsFile) {
-            const jsonText = await tweetsFile.async('text');
-            const parsed = JSON.parse(jsonText);
-            if (Array.isArray(parsed)) {
-              allTweets = parsed;
-            } else if (parsed && Array.isArray(parsed.tweets)) {
-              allTweets = parsed.tweets;
-              if (!userProfile && parsed.profile) userProfile = parsed.profile;
-            } else {
-              allTweets = [];
-            }
-          }
-
-          // 2. profile.json
-          const profileFile = Object.values(zip.files).find(f => (f.name.endsWith('profile.json') || f.name === 'profile.json') && !f.dir);
-          if (profileFile) {
-            const jsonText = await profileFile.async('text');
-            userProfile = JSON.parse(jsonText);
-          }
-
-          // 3. summary.json
-          const summaryFile = Object.values(zip.files).find(f => (f.name.endsWith('summary.json') || f.name === 'summary.json') && !f.dir);
-          if (summaryFile) {
-            const jsonText = await summaryFile.async('text');
-            archiveSummary = JSON.parse(jsonText);
-          }
-
-          // 4. Cache media files
-          let mediaCount = 0;
-          for (const [path, entry] of Object.entries(zip.files)) {
-            if (!entry.dir && (path.includes('media/') || path.includes('profile_media/'))) {
-              const blob = await entry.async('blob');
-              const blobUrl = URL.createObjectURL(blob);
-              const cleanKey = path.replace(/^.*?(media\/|profile_media\/)/, '$1');
-              cachedBlobs.set(cleanKey, blobUrl);
-              cachedBlobs.set(path, blobUrl);
-              cachedBlobs.set(path.split('/').pop(), blobUrl);
-              mediaCount++;
-            }
-          }
-
-          renderAll(file.name, mediaCount);
-          showToast(`展開完了: ${allTweets.length} 件のポスト`);
+          const arrayBuffer = await file.arrayBuffer();
+          await unpackZipBytes(arrayBuffer, file.name);
           return;
         } catch (err) {
           console.error(err);
@@ -1296,7 +1392,18 @@
       document.getElementById('topHeaderSub').textContent = `${filtered.length.toLocaleString()} 件のポスト`;
 
       if (filtered.length === 0) {
-        list.innerHTML = '<div class="empty-notice">該当するポストがありません</div>';
+        if (allTweets.length === 0) {
+          list.innerHTML = `
+            <div class="empty-notice">
+              <div style="font-size: 16px; font-weight: 700; color: var(--text-main);">アーカイブが読み込まれていません</div>
+              <div style="color: var(--text-sub); font-size: 13px;">右サイドバーの「.xarchpjzip / .zip を選択」または「過去の出力」一覧からアーカイブを開いてください</div>
+              <button type="button" class="btn-demo-load" id="btnLoadDemo">デモポストを表示して試す</button>
+            </div>
+          `;
+          document.getElementById('btnLoadDemo')?.addEventListener('click', loadDemoData);
+        } else {
+          list.innerHTML = '<div class="empty-notice">該当するポストがありません（検索条件や絞り込みを変更してください）</div>';
+        }
         return;
       }
 
@@ -1520,8 +1627,8 @@
       }, 'image/png');
     }
 
-    // Demo Data Loader
-    document.getElementById('btnLoadDemo')?.addEventListener('click', () => {
+    // Demo Data Loader Function
+    function loadDemoData() {
       userProfile = {
         name: "Hikaproj",
         screen_name: "hikaproj",
@@ -1565,10 +1672,33 @@
       ];
       renderAll('デモデータ (Hikaproj Sample)', 0);
       showToast('デモデータを読み込みました');
+    }
+
+    document.getElementById('btnLoadDemo')?.addEventListener('click', loadDemoData);
+    document.getElementById('btnBrowseNative')?.addEventListener('click', () => {
+      document.getElementById('filePicker')?.click();
     });
+    document.getElementById('btnRefreshPastArchives')?.addEventListener('click', loadPastArchives);
+
+    // Initial past archives discovery
+    loadPastArchives();
+
+    // Auto-detect URL parameter ?archive=... or listen to Tauri event
+    const urlParams = new URLSearchParams(window.location.search);
+    const archiveParam = urlParams.get('archive');
+    if (archiveParam) {
+      loadArchiveFromPathOrUrl(archiveParam);
+    }
+
+    if (isTauri && window.__TAURI__?.event?.listen) {
+      window.__TAURI__.event.listen('load-archive-path', (e) => {
+        if (e.payload) loadArchiveFromPathOrUrl(e.payload);
+      });
+    }
 
     // Auto-detect local tweets.json if opened in an exported directory
     (async function checkLocalArchive() {
+      if (archiveParam) return;
       try {
         const res = await fetch('tweets.json');
         if (res.ok) {

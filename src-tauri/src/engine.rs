@@ -98,6 +98,7 @@ pub struct ScrapeEngine {
     is_stopping: Arc<Mutex<bool>>,
     metrics: Arc<Mutex<EngineMetrics>>,
     event_tx: Option<mpsc::UnboundedSender<TaskEvent>>,
+    app: Option<tauri::AppHandle>,
 }
 
 impl ScrapeEngine {
@@ -134,7 +135,13 @@ impl ScrapeEngine {
                 speed_tweets_per_sec: 0.0,
             })),
             event_tx: tx,
+            app: None,
         }
+    }
+
+    pub fn with_app_handle(mut self, app: tauri::AppHandle) -> Self {
+        self.app = Some(app);
+        self
     }
 
     fn log(&self, msg: &str, level: &str) {
@@ -144,8 +151,16 @@ impl ScrapeEngine {
             let _ = tx.send(TaskEvent {
                 level: level.to_string(),
                 message: msg.to_string(),
-                timestamp: ts,
+                timestamp: ts.clone(),
             });
+        }
+        if let Some(ref app) = self.app {
+            use tauri::Emitter;
+            let _ = app.emit("task-log", serde_json::json!({
+                "level": level,
+                "message": msg,
+                "timestamp": ts
+            }));
         }
     }
 
@@ -271,15 +286,30 @@ impl ScrapeEngine {
                     .or_else(|| item.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string())) {
                     if seen_ids.insert(id_str.clone()) {
                         self.extract_tweet_media(&item, &id_str, &mut media_queue).await;
+
+                        if let Some(ref app) = self.app {
+                            use tauri::Emitter;
+                            let _ = app.emit("task-tweet", &item);
+                        }
+
                         collected_tweets.push(item);
 
                         let mut m = self.metrics.lock().await;
                         m.tweets_matching += 1;
                         m.tweets_processed += 1;
                         let elapsed_sec = start_time.elapsed().as_secs_f64().max(0.1);
-                        m.speed_tweets_per_sec = (m.tweets_matching as f64 / elapsed_sec).min(100.0);
+                        m.speed_tweets_per_sec = (m.tweets_matching as f64 / elapsed_sec).min(500.0);
                     }
                 }
+            }
+
+            if let Some(ref app) = self.app {
+                use tauri::Emitter;
+                let m = self.metrics.lock().await;
+                let _ = app.emit("task-state", serde_json::json!({
+                    "state": "FETCHING",
+                    "metrics": &*m
+                }));
             }
 
             self.log(&format!("Retrieved batch. Total collected: {} tweets", collected_tweets.len()), "INFO");
@@ -294,7 +324,7 @@ impl ScrapeEngine {
                 break;
             }
 
-            sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_millis(10)).await;
         }
 
         // 3. Sorting
@@ -411,6 +441,16 @@ impl ScrapeEngine {
 
         self.log(&format!("Archive successfully built: {:?}", final_path), "SUCCESS");
         live_activity::end_activity(&format!("Archive completed: {} posts", collected_tweets.len()));
+
+        if let Some(ref app) = self.app {
+            use tauri::Emitter;
+            let m = self.metrics.lock().await;
+            let _ = app.emit("task-state", serde_json::json!({
+                "state": "COMPLETED",
+                "metrics": &*m,
+                "archive_path": final_path.to_string_lossy().to_string()
+            }));
+        }
 
         Ok(final_path)
     }

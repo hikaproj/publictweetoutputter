@@ -28,7 +28,10 @@ pub fn run_with_mode(mode: AppMode) {
             commands::start_backup,
             commands::stop_backup,
             commands::open_archive_native,
-            commands::open_viewer_window
+            commands::open_viewer_window,
+            commands::open_in_viewer,
+            commands::list_backups,
+            commands::read_archive_file
         ])
         .setup(move |app| {
             if mode == AppMode::Viewer {

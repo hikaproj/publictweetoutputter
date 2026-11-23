@@ -233,13 +233,16 @@ app.get('/api/history', (req, res) => {
     const fullPath = path.join(OUTPUT_DIR, entry.name);
     const stat = fs.statSync(fullPath);
 
-    if (entry.isFile() && (entry.name.endsWith('.zip') || entry.name.endsWith('.tar.gz') || entry.name.endsWith('.tar'))) {
+    if (entry.isFile() && (entry.name.endsWith('.xarchpjzip') || entry.name.endsWith('.zip') || entry.name.endsWith('.tar.gz') || entry.name.endsWith('.tar'))) {
       backups.push({
         filename: entry.name,
+        name: entry.name,
         type: 'archive',
         size: stat.size,
+        size_mb: (stat.size / (1024 * 1024)).toFixed(1),
         formattedSize: formatBytes(stat.size),
-        createdAt: stat.mtime
+        createdAt: stat.mtime,
+        created_at: new Date(stat.mtime).toLocaleString('ja-JP')
       });
     } else if (entry.isDirectory()) {
       const summaryFile = path.join(fullPath, 'summary.json');
@@ -250,16 +253,20 @@ app.get('/api/history', (req, res) => {
         } catch (e) {}
       }
       backups.push({
+        filename: entry.name,
+        name: entry.name,
         folderName: entry.name,
         type: 'folder',
+        size_mb: summary?.total_bytes ? (summary.total_bytes / (1024 * 1024)).toFixed(1) : '0.0',
         createdAt: stat.mtime,
+        created_at: new Date(stat.mtime).toLocaleString('ja-JP'),
         summary
       });
     }
   }
 
   backups.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  res.json({ backups });
+  res.json({ backups, items: backups });
 });
 
 // Presets endpoint

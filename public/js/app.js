@@ -15,6 +15,43 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
+  // Tauri Native Event Streaming Listeners (Live Feed, Logs, State)
+  // ==========================================================================
+  if (isTauri && window.__TAURI__?.event?.listen) {
+    window.__TAURI__.event.listen('task-tweet', (e) => {
+      renderFeedTweet(e.payload);
+    });
+
+    window.__TAURI__.event.listen('task-state', (e) => {
+      const data = e.payload;
+      if (data.metrics) updateTelemetry(data.metrics, data.state);
+      if (data.state === 'FETCHING' || data.state === 'DOWNLOADING_MEDIA' || data.state === 'MONITORING') {
+        setRunningUI(true);
+      } else if (data.state === 'COMPLETED' || data.state === 'STOPPED') {
+        setRunningUI(false);
+      }
+      if (data.archive_path) {
+        lastGeneratedArchive = data.archive_path;
+        archiveDownloadWrap.classList.remove('hidden');
+        archiveDownloadText.textContent = `出力完了: ${data.archive_path}`;
+        archiveDownloadLink.onclick = async (ev) => {
+          ev.preventDefault();
+          try {
+            await window.__TAURI__.core.invoke('open_in_viewer', { archivePath: data.archive_path });
+          } catch (_) {
+            window.open('viewer.html', '_blank');
+          }
+        };
+      }
+    });
+
+    window.__TAURI__.event.listen('task-log', (e) => {
+      const data = e.payload;
+      appendTerminalLog(data.message, data.level || 'INFO');
+    });
+  }
+
+  // ==========================================================================
   // Launch Standalone Dedicated Viewer Window
   // ==========================================================================
   const openViewerWindowBtn = document.getElementById('openViewerWindowBtn');
@@ -430,23 +467,6 @@ document.addEventListener('DOMContentLoaded', () => {
       appendTerminalLog(`Starting backup via Rust Native Engine for @${config.screenName}...`, 'INFO');
       appendTerminalLog(`Output destination: ${config.outputDir} (${config.exportFormat})`, 'INFO');
 
-      // Native progress simulator ticker
-      let fakeProcessed = 0;
-      let fakeMedia = 0;
-      const progressTimer = setInterval(() => {
-        if (!isTaskRunning) { clearInterval(progressTimer); return; }
-        fakeProcessed += Math.floor(Math.random() * 8) + 4;
-        fakeMedia += Math.floor(Math.random() * 2);
-        updateTelemetry({
-          tweets_processed: fakeProcessed,
-          speed_tweets_per_sec: 14.5,
-          media_downloaded: fakeMedia,
-          images_found: fakeMedia + 5,
-          videos_found: 1,
-          total_bytes: fakeMedia * 350000
-        }, 'FETCHING');
-      }, 500);
-
       try {
         const finalPath = await window.__TAURI__.core.invoke('start_backup', {
           config: {
@@ -473,10 +493,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
 
-        clearInterval(progressTimer);
         setRunningUI(false);
         lastGeneratedArchive = finalPath;
-        updateTelemetry({ tweets_processed: fakeProcessed, media_downloaded: fakeMedia }, 'COMPLETED');
 
         archiveDownloadWrap.classList.remove('hidden');
         archiveDownloadText.textContent = `出力完了: ${finalPath}`;
@@ -484,15 +502,14 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveDownloadLink.onclick = async (e) => {
           e.preventDefault();
           try {
-            await window.__TAURI__.core.invoke('open_viewer_window');
+            await window.__TAURI__.core.invoke('open_in_viewer', { archivePath: finalPath });
           } catch (err) {
-            window.open('viewer.html', '_blank');
+            window.open(`viewer.html?archive=${encodeURIComponent(finalPath)}`, '_blank');
           }
         };
 
         appendTerminalLog(`Backup completed successfully at: ${finalPath}`, 'SUCCESS');
       } catch (err) {
-        clearInterval(progressTimer);
         setRunningUI(false);
         alert(`Rust エンジン実行エラー: ${err}`);
         appendTerminalLog(`Error: ${err}`, 'ERROR');
@@ -579,12 +596,16 @@ document.addEventListener('DOMContentLoaded', () => {
   openInViewerAfterExportBtn?.addEventListener('click', async () => {
     if (isTauri) {
       try {
-        await window.__TAURI__.core.invoke('open_viewer_window');
+        if (lastGeneratedArchive) {
+          await window.__TAURI__.core.invoke('open_in_viewer', { archivePath: lastGeneratedArchive });
+        } else {
+          await window.__TAURI__.core.invoke('open_viewer_window');
+        }
       } catch (err) {
-        window.open('viewer.html', '_blank');
+        window.open(lastGeneratedArchive ? `viewer.html?archive=${encodeURIComponent(lastGeneratedArchive)}` : 'viewer.html', '_blank');
       }
     } else {
-      window.open('viewer.html', '_blank');
+      window.open(lastGeneratedArchive ? `viewer.html?archive=${encodeURIComponent(lastGeneratedArchive)}` : 'viewer.html', '_blank');
     }
   });
 
@@ -678,15 +699,47 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
+  window.openArchiveInViewer = async function(archivePath) {
+    if (isTauri) {
+      try {
+        await window.__TAURI__.core.invoke('open_in_viewer', { archivePath });
+        return;
+      } catch (e) {
+        console.error('Failed to open archive in native viewer:', e);
+      }
+    }
+    window.open(`viewer.html?archive=${encodeURIComponent(archivePath)}`, '_blank');
+  };
+
   async function loadHistory() {
     if (!historyList) return;
     if (isTauri) {
-      historyList.innerHTML = '<p class="helper-text" style="padding: 1rem;">デスクトップ版では output フォルダ内に保存された .xarchpjzip または ZIP を独立Xビューアー（fxtweet-viewer）で直接開くことができます。</p>';
+      try {
+        const backups = await window.__TAURI__.core.invoke('list_backups', { outputDir: outputDirInput?.value?.trim() || 'output' });
+        if (!Array.isArray(backups) || backups.length === 0) {
+          historyList.innerHTML = '<p class="helper-text" style="padding: 1rem;">バックアップ履歴はありません (output フォルダ内が空です)</p>';
+          return;
+        }
+        historyList.innerHTML = backups.map(item => `
+          <div class="history-card">
+            <div>
+              <div class="history-title">${escapeHtml(item.name)}</div>
+              <div class="helper-text">${escapeHtml(item.created_at || '')} · ${escapeHtml(item.size_formatted || (item.size_mb + ' MB'))}</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-primary btn-sm" onclick="openArchiveInViewer('${escapeHtml(item.path.replace(/\\/g, '/'))}')">ビューアーで開く</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        historyList.innerHTML = `<p class="helper-text" style="padding: 1rem;">バックアップ取得エラー: ${escapeHtml(err.message || String(err))}</p>`;
+      }
       return;
     }
     try {
       const res = await fetch('/api/history');
-      const items = await res.json();
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.backups || []);
       if (!Array.isArray(items) || items.length === 0) {
         historyList.innerHTML = '<p class="helper-text" style="padding: 1rem;">バックアップ履歴はありません</p>';
         return;
@@ -697,7 +750,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="history-title">${escapeHtml(item.name)}</div>
             <div class="helper-text">${escapeHtml(item.created_at || '')} · ${item.size_mb || 0} MB</div>
           </div>
-          <a href="/output/${encodeURIComponent(item.name)}" download class="btn btn-secondary btn-sm">ダウンロード</a>
+          <div style="display: flex; gap: 8px;">
+            <a href="viewer.html?archive=${encodeURIComponent(item.name)}" target="_blank" class="btn btn-primary btn-sm">ビューアーで開く</a>
+            <a href="/output/${encodeURIComponent(item.name)}" download class="btn btn-secondary btn-sm">ダウンロード</a>
+          </div>
         </div>
       `).join('');
     } catch (e) {

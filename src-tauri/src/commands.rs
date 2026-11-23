@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,6 +20,18 @@ pub struct ArchivePayload {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupItem {
+    pub name: String,
+    pub path: String,
+    pub size_bytes: u64,
+    pub size_formatted: String,
+    pub size_mb: String,
+    pub created_at: String,
+    pub is_archive: bool,
+    pub tweets_count: Option<u64>,
+}
+
 #[tauri::command]
 pub(crate) async fn inspect_profile(handle: String) -> Result<UserProfile, String> {
     let client = fxtwitter::FxClient::new();
@@ -28,6 +40,7 @@ pub(crate) async fn inspect_profile(handle: String) -> Result<UserProfile, Strin
 
 #[tauri::command]
 pub(crate) async fn start_backup(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     config: ScrapeConfig,
 ) -> Result<String, String> {
@@ -40,7 +53,7 @@ pub(crate) async fn start_backup(
     } else {
         PathBuf::from("output")
     };
-    let eng = Arc::new(engine::ScrapeEngine::new(config, &base_out, None));
+    let eng = Arc::new(engine::ScrapeEngine::new(config, &base_out, None).with_app_handle(app));
     {
         let mut lock = state.engine.lock().await;
         *lock = Some(Arc::clone(&eng));
@@ -89,6 +102,114 @@ pub(crate) async fn open_viewer_window(app: tauri::AppHandle) -> Result<(), Stri
     .build()
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn open_in_viewer(app: tauri::AppHandle, archive_path: String) -> Result<(), String> {
+    use tauri::Emitter;
+    if let Some(existing) = app.get_webview_window("viewer") {
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        let _ = existing.emit("load-archive-path", &archive_path);
+        return Ok(());
+    }
+    let _win = tauri::WebviewWindowBuilder::new(
+        &app,
+        "viewer",
+        tauri::WebviewUrl::App("viewer.html".into())
+    )
+    .title("FxTwitter Archive Viewer - by Hikaproj")
+    .inner_size(1366.0, 860.0)
+    .min_inner_size(900.0, 600.0)
+    .resizable(true)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    let app_clone = app.clone();
+    let path_clone = archive_path.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_millis(700)).await;
+        if let Some(w) = app_clone.get_webview_window("viewer") {
+            let _ = w.emit("load-archive-path", &path_clone);
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn list_backups(output_dir: Option<String>) -> Result<Vec<BackupItem>, String> {
+    let dir_path = if let Some(ref d) = output_dir {
+        if !d.trim().is_empty() {
+            PathBuf::from(d.trim())
+        } else {
+            PathBuf::from("output")
+        }
+    } else {
+        PathBuf::from("output")
+    };
+
+    if !dir_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut backups = Vec::new();
+    let entries = fs::read_dir(&dir_path).map_err(|e| e.to_string())?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let fname = entry.file_name().to_string_lossy().to_string();
+        let meta = entry.metadata().ok();
+        let size_bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+        let mb = size_bytes as f64 / (1024.0 * 1024.0);
+        let size_formatted = format!("{:.1} MB", mb);
+        let size_mb = format!("{:.1}", mb);
+        let created_at = meta.and_then(|m| m.modified().ok())
+            .map(|t| chrono::DateTime::<chrono::Local>::from(t).format("%Y/%m/%d %H:%M:%S").to_string())
+            .unwrap_or_default();
+
+        if path.is_file() {
+            let lower = fname.to_lowercase();
+            if lower.ends_with(".zip") || lower.ends_with(".xarchpjzip") || lower.ends_with(".tar.gz") || lower.ends_with(".tar") {
+                backups.push(BackupItem {
+                    name: fname,
+                    path: path.to_string_lossy().to_string(),
+                    size_bytes,
+                    size_formatted,
+                    size_mb,
+                    created_at,
+                    is_archive: true,
+                    tweets_count: None,
+                });
+            }
+        } else if path.is_dir() {
+            let tweets_json = path.join("tweets.json");
+            if tweets_json.exists() {
+                backups.push(BackupItem {
+                    name: fname,
+                    path: path.to_string_lossy().to_string(),
+                    size_bytes,
+                    size_formatted: "フォルダ".to_string(),
+                    size_mb: "0.0".to_string(),
+                    created_at,
+                    is_archive: false,
+                    tweets_count: None,
+                });
+            }
+        }
+    }
+
+    backups.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(backups)
+}
+
+#[tauri::command]
+pub(crate) async fn read_archive_file(file_path: String) -> Result<Vec<u8>, String> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", file_path));
+    }
+    fs::read(path).map_err(|e| format!("Failed to read archive: {}", e))
 }
 
 #[tauri::command]
