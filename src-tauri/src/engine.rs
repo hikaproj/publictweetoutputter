@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::sleep;
 
-use crate::fxtwitter::{FxClient, UserProfile};
+use crate::fxtwitter::FxClient;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScrapeConfig {
@@ -230,6 +230,10 @@ impl ScrapeEngine {
 
         fs::write(&tweets_json_path, serde_json::to_string_pretty(&collected_tweets).unwrap_or_default()).ok();
         fs::write(&profile_json_path, serde_json::to_string_pretty(&profile).unwrap_or_default()).ok();
+        {
+            let m = self.metrics.lock().await;
+            fs::write(&summary_json_path, serde_json::to_string_pretty(&*m).unwrap_or_default()).ok();
+        }
 
         let readme = format!(
 "=====================================================
